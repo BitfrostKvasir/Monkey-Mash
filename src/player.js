@@ -186,7 +186,7 @@ export class Player {
     if (this._arcTimer   > 0) {
       this._arcTimer -= dt;
       if (this._arcTimer <= 0 && this._arcMesh) {
-        this.mesh.remove(this._arcMesh);
+        this.scene.remove(this._arcMesh);
         this._arcMesh = null;
       }
     }
@@ -254,10 +254,14 @@ export class Player {
     const geo = new THREE.RingGeometry(0.3, range, 16, 1, -arcTotal/2, arcTotal);
     const mat = new THREE.MeshBasicMaterial({ color: 0xffff44, transparent: true, opacity: 0.45, side: THREE.DoubleSide });
     this._arcMesh = new THREE.Mesh(geo, mat);
-    this._arcMesh.rotation.x = -Math.PI / 2;
+    // Place in world space so parent mesh rotation doesn't affect orientation
+    this._arcMesh.position.copy(this.mesh.position);
     this._arcMesh.position.y = 0.05;
-    this._arcMesh.rotation.z = Math.atan2(-this.aimDir.x, this.aimDir.z);
-    this.mesh.add(this._arcMesh);
+    // Lie flat: rotate XY ring into XZ ground plane
+    this._arcMesh.rotation.x = -Math.PI / 2;
+    // Face aim direction: ring angle-0 = world +X, so rotate Y to align with aimDir
+    this._arcMesh.rotation.y = Math.atan2(-this.aimDir.z, this.aimDir.x);
+    this.scene.add(this._arcMesh);
     this._arcTimer = 0.12;
   }
 
