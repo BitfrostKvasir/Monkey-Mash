@@ -15,6 +15,7 @@ export class GruntEnemy {
     this.maxHp   = GRUNT_HP;
     this._contactCd = 0;
     this._flashTimer = 0;
+    this._droppedBanana = false;
     this.velocity = new THREE.Vector3();
 
     this.mesh = this._buildMesh();

@@ -1,12 +1,14 @@
 import * as THREE from 'three';
 
 const COLLECT_RADIUS = 0.9;
+const VACUUM_SPEED   = 18;
 
 export class BananaDrop {
   constructor(scene, x, z) {
-    this.scene    = scene;
+    this.scene     = scene;
     this.collected = false;
-    this._t       = Math.random() * Math.PI * 2; // random phase offset
+    this._t        = Math.random() * Math.PI * 2;
+    this._vacuum   = false;
 
     const geo = new THREE.SphereGeometry(0.2, 7, 5);
     const mat = new THREE.MeshLambertMaterial({ color: 0xffe135 });
@@ -15,7 +17,6 @@ export class BananaDrop {
     this.mesh.castShadow = true;
     scene.add(this.mesh);
 
-    // Small stem
     const stemGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.15, 5);
     const stemMat = new THREE.MeshLambertMaterial({ color: 0x7a5c00 });
     const stem = new THREE.Mesh(stemGeo, stemMat);
@@ -23,29 +24,37 @@ export class BananaDrop {
     this.mesh.add(stem);
   }
 
+  startVacuum() { this._vacuum = true; }
+
   update(dt, player) {
     if (this.collected) return;
 
-    this._t += dt * 3;
-    this.mesh.position.y = 0.3 + Math.sin(this._t) * 0.12;
-    this.mesh.rotation.y += dt * 2;
-
     const dx = player.position.x - this.mesh.position.x;
     const dz = player.position.z - this.mesh.position.z;
-    if (Math.sqrt(dx * dx + dz * dz) < COLLECT_RADIUS) {
-      this.collect(player);
+    const dist = Math.sqrt(dx * dx + dz * dz);
+
+    if (this._vacuum) {
+      if (dist < 0.25) { this.collect(player); return; }
+      this.mesh.position.x += (dx / dist) * VACUUM_SPEED * dt;
+      this.mesh.position.z += (dz / dist) * VACUUM_SPEED * dt;
+      this.mesh.position.y = 0.3;
+    } else {
+      this._t += dt * 3;
+      this.mesh.position.y = 0.3 + Math.sin(this._t) * 0.12;
+      this.mesh.rotation.y += dt * 2;
+      if (dist < COLLECT_RADIUS) this.collect(player);
     }
   }
 
   collect(player) {
+    if (this.collected) return;
     this.collected = true;
-    player.collectBanana();
+    const pos = this.mesh.position.clone();
+    player.collectBanana(pos);
     this.scene.remove(this.mesh);
   }
 
   destroy() {
-    if (!this.collected) {
-      this.scene.remove(this.mesh);
-    }
+    if (!this.collected) this.scene.remove(this.mesh);
   }
 }
