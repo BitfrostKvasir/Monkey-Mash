@@ -10,7 +10,7 @@ scene.fog = new THREE.Fog(0x1a2a1a, 25, 45);
 
 // ── Top-down camera ───────────────────────────────────────────────
 const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 100);
-camera.position.set(0, 18, 4);
+camera.position.set(0, 26, 1);
 camera.lookAt(0, 0, 0);
 
 // ── Renderer ──────────────────────────────────────────────────────
@@ -58,13 +58,8 @@ const tryAgainBtn = document.getElementById('btn-try-again');
 
 // ── Game state ────────────────────────────────────────────────────
 const input = new InputManager();
-let game    = null;
-let camTarget = new THREE.Vector3();
-let last   = performance.now();
-
-// Camera smooth follow
-const CAM_OFFSET = new THREE.Vector3(0, 18, 4);
-const CAM_LERP   = 0.08;
+let game = null;
+let last = performance.now();
 
 function startGame(config) {
   if (game) {
@@ -103,12 +98,6 @@ function loop() {
 
   if (game) {
     game.update(dt, now, camera, mouseNDC);
-
-    // Smooth camera follow player
-    const pp = game.player.position;
-    camTarget.set(pp.x + CAM_OFFSET.x, CAM_OFFSET.y, pp.z + CAM_OFFSET.z);
-    camera.position.lerp(camTarget, CAM_LERP);
-    camera.lookAt(pp.x, 0, pp.z);
 
     // Update HUD
     const hp = game.player.hp / game.player.maxHp;
