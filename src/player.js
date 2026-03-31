@@ -34,57 +34,73 @@ export class Player {
     this._camAzimuth = 0;       // set for one frame on fresh left-click
     this._hitCooldown = 0; // managed by ball.js to prevent multi-frame contacts
 
-    const bodyColor = color ?? (side === 1 ? 0xc8860a : 0x2266cc);
+    const bodyColor = color ?? (side === 1 ? 0x7B3F00 : 0x2266cc);
     this.mesh = this._buildMesh(scene, side, bodyColor, hat);
   }
 
   _buildMesh(scene, side, bodyColor, hat) {
     const group = new THREE.Group();
 
-    const bodyMat = new THREE.MeshLambertMaterial({ color: bodyColor });
-    const muzzleMat = new THREE.MeshLambertMaterial({ color: 0xd4a96a });
-    const eyeMat = new THREE.MeshLambertMaterial({ color: 0x111111 });
+    const mat    = (c) => new THREE.MeshLambertMaterial({ color: c });
+    const body   = mat(bodyColor);
+    const cream  = mat(0xF5DEB3);
+    const white  = mat(0xF5F5F5);
+    const black  = mat(0x151515);
 
-    // Body
-    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.7, 12), bodyMat);
-    body.position.y = 0.7;
-    body.castShadow = true;
-    group.add(body);
+    const add = (geo, m, x = 0, y = 0, z = 0, sx = 1, sy = 1, sz = 1) => {
+      const mesh = new THREE.Mesh(geo, m);
+      mesh.position.set(x, y, z);
+      mesh.scale.set(sx, sy, sz);
+      mesh.castShadow = true;
+      group.add(mesh);
+      return mesh;
+    };
 
-    // Head
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 12), bodyMat);
-    head.position.y = 1.35;
-    head.castShadow = true;
-    group.add(head);
+    // ── Body (rounded barrel) ──
+    add(new THREE.SphereGeometry(0.36, 12, 10), body, 0, 0.56, 0, 1, 1.25, 0.95);
 
-    // Muzzle
-    const muzzle = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 8), muzzleMat);
-    muzzle.position.set(0, 1.32, 0.25);
-    muzzle.scale.z = 0.5;
-    group.add(muzzle);
+    // ── Head (large, round) ──
+    add(new THREE.SphereGeometry(0.44, 14, 12), body, 0, 1.32, 0);
 
-    // Eyes
-    [-0.1, 0.1].forEach(x => {
-      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 6), eyeMat);
-      eye.position.set(x, 1.42, 0.28);
-      group.add(eye);
+    // Face mask — white oval on front of head
+    add(new THREE.SphereGeometry(0.34, 12, 10), white, 0, 1.28, 0.36, 0.88, 0.72, 0.28);
+
+    // Eyes — white sclera
+    [-0.14, 0.14].forEach(x => {
+      add(new THREE.SphereGeometry(0.115, 10, 8), white, x, 1.38, 0.48, 1, 1, 0.45);
+      // Pupil
+      add(new THREE.SphereGeometry(0.072, 8, 6), black, x, 1.38, 0.51);
+      // Shine dot
+      add(new THREE.SphereGeometry(0.026, 6, 4), white, x + 0.03, 1.41, 0.545);
     });
 
-    // Arms
-    [-0.4, 0.4].forEach((x, i) => {
-      const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.5, 8), bodyMat);
-      arm.rotation.z = (i === 0 ? 1 : -1) * Math.PI / 4;
-      arm.position.set(x, 0.85, 0);
+    // Nose
+    add(new THREE.SphereGeometry(0.055, 7, 5), black, 0, 1.22, 0.52);
+
+    // Ears
+    [-0.44, 0.44].forEach(x => {
+      add(new THREE.SphereGeometry(0.155, 8, 6), body, x, 1.36, 0);
+      // Inner ear
+      add(new THREE.SphereGeometry(0.085, 7, 5), cream, x, 1.36, 0.08);
+    });
+
+    // ── Arms — horizontal T-pose ──
+    [-1, 1].forEach(dir => {
+      // Upper arm
+      const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.09, 0.55, 8), body);
+      arm.rotation.z = Math.PI / 2;
+      arm.position.set(dir * 0.65, 0.9, 0);
       arm.castShadow = true;
       group.add(arm);
+      // Hand (cream sphere)
+      add(new THREE.SphereGeometry(0.13, 8, 6), cream, dir * 0.98, 0.9, 0);
     });
 
-    // Legs
-    [-0.15, 0.15].forEach(x => {
-      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.5, 8), bodyMat);
-      leg.position.set(x, 0.25, 0);
-      leg.castShadow = true;
-      group.add(leg);
+    // ── Legs — short & stubby ──
+    [-0.17, 0.17].forEach(x => {
+      add(new THREE.CylinderGeometry(0.11, 0.1, 0.32, 8), body, x, 0.2, 0);
+      // Foot (black, slightly forward)
+      add(new THREE.SphereGeometry(0.13, 8, 6), black, x, 0.04, 0.07, 1, 0.75, 1.35);
     });
 
     // Hat
@@ -99,7 +115,7 @@ export class Player {
     if (hat === 'none') return;
 
     const hatGroup = new THREE.Group();
-    hatGroup.position.y = 1.68;
+    hatGroup.position.y = 1.82;
 
     if (hat === 'tophat') {
       const brimMat = new THREE.MeshLambertMaterial({ color: 0x111111 });

@@ -10,7 +10,7 @@ export const DIFFICULTIES = {
 };
 
 export const PLAYER_COLORS = [
-  { label: 'Orange',  hex: '#c8860a', value: 0xc8860a },
+  { label: 'Brown',   hex: '#7B3F00', value: 0x7B3F00 },
   { label: 'Red',     hex: '#cc2222', value: 0xcc2222 },
   { label: 'Green',   hex: '#22aa44', value: 0x22aa44 },
   { label: 'Purple',  hex: '#8833cc', value: 0x8833cc },
