@@ -24,8 +24,8 @@ export const UPGRADES = [
     apply: p => { p.stats.dashDmgLight = true; } },
 
   // Cost 3 — Rare
-  { id:'lifesteal', cost:3, label:'Lifesteal',          icon:'🩸',  desc:'Attacks heal 20% of damage dealt.',
-    apply: p => { p.stats.lifesteal += 0.20; } },
+  { id:'lifesteal', cost:3, label:'Lifesteal',          icon:'🩸',  desc:'Attacks heal 5% of damage dealt.',
+    apply: p => { p.stats.lifesteal += 0.05; } },
   { id:'chain',     cost:3, label:'Chain Hit',          icon:'⛓️',  desc:'Hits chain to nearest other enemy for 50% damage.',
     apply: p => { p.stats.chain = true; } },
   { id:'bananade',  cost:3, label:'Bananade',           icon:'🍌',  desc:'Collecting bananas explodes for 20 damage nearby.',
