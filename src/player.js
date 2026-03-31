@@ -30,7 +30,8 @@ export class Player {
 
     this._jumpPressedLast = false;
     this._mouseWasDown = false;
-    this.wantsPass = false;       // set for one frame on fresh left-click
+    this.wantsPass = false;
+    this._camAzimuth = 0;       // set for one frame on fresh left-click
     this._hitCooldown = 0; // managed by ball.js to prevent multi-frame contacts
 
     const bodyColor = color ?? (side === 1 ? 0xc8860a : 0x2266cc);
@@ -171,9 +172,10 @@ export class Player {
     return this.mesh.position;
   }
 
-  update(dt, now, ball) {
+  update(dt, now, ball, camAzimuth = 0) {
     if (this.isHuman) {
-      this._handleHumanInput(dt, now, ball);
+      this._handleHumanInput(dt, now, ball, camAzimuth);
+
     } else {
       this._handleAI(dt, ball);
     }
@@ -206,18 +208,42 @@ export class Player {
     } else {
       this.mesh.rotation.z = THREE.MathUtils.lerp(this.mesh.rotation.z, 0, 10 * dt);
     }
+
+    // Shift-lock: face the direction the camera is pointing
+    if (this.isHuman) {
+      this.mesh.rotation.y = THREE.MathUtils.lerp(
+        this.mesh.rotation.y,
+        Math.PI + this._camAzimuth,
+        15 * dt
+      );
+    }
   }
 
-  _handleHumanInput(dt, now) {
+  _handleHumanInput(dt, now, ball, camAzimuth) {
+    this._camAzimuth = camAzimuth;
     const inp = this.input;
 
-    this.velocity.x = 0;
-    this.velocity.z = 0;
+    // Camera-relative movement vectors
+    // forward = direction camera faces projected on XZ plane
+    const fwdX = -Math.sin(camAzimuth);
+    const fwdZ = -Math.cos(camAzimuth);
+    const rgtX =  Math.cos(camAzimuth);
+    const rgtZ = -Math.sin(camAzimuth);  // right = forward rotated -90° around Y
 
-    if (inp.isDown('KeyW')) this.velocity.z -= MOVE_SPEED * this.side;
-    if (inp.isDown('KeyS')) this.velocity.z += MOVE_SPEED * this.side;
-    if (inp.isDown('KeyA')) this.velocity.x -= MOVE_SPEED;
-    if (inp.isDown('KeyD')) this.velocity.x += MOVE_SPEED;
+    let mx = 0, mz = 0;
+    if (inp.isDown('KeyW')) { mx += fwdX; mz += fwdZ; }
+    if (inp.isDown('KeyS')) { mx -= fwdX; mz -= fwdZ; }
+    if (inp.isDown('KeyD')) { mx += rgtX; mz += rgtZ; }
+    if (inp.isDown('KeyA')) { mx -= rgtX; mz -= rgtZ; }
+
+    const len = Math.sqrt(mx * mx + mz * mz);
+    if (len > 0) {
+      this.velocity.x = (mx / len) * MOVE_SPEED;
+      this.velocity.z = (mz / len) * MOVE_SPEED;
+    } else {
+      this.velocity.x = 0;
+      this.velocity.z = 0;
+    }
 
     const jumpPressed = inp.isDown('Space');
     if (jumpPressed && !this._jumpPressedLast) {

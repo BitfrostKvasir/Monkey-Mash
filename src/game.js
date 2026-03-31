@@ -85,7 +85,7 @@ export class Game {
 
   // ── Main update ──────────────────────────────────────────────────
 
-  update(dt, now) {
+  update(dt, now, camAzimuth = 0) {
     if (this._over) return;
 
     if (this._state === 'point') {
@@ -98,7 +98,7 @@ export class Game {
 
     if (this._state === 'serving') {
       // Both players can move freely while waiting for serve
-      this.player.update(dt, now, null);
+      this.player.update(dt, now, null, camAzimuth);
       this.opponent.update(dt, now, null);
 
       if (this._servingSide === 1) {
@@ -113,7 +113,7 @@ export class Game {
     }
 
     // ── Rally ──
-    this.player.update(dt, now, this.ball);
+    this.player.update(dt, now, this.ball, camAzimuth);
     this.opponent.update(dt, now, this.ball);
 
     const loser = this.ball.update(dt, [this.player, this.opponent]);

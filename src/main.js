@@ -92,7 +92,7 @@ function loop() {
   last = performance.now();
 
   if (game) {
-    game.update(dt, now);
+    game.update(dt, now, camAzimuth);
     updateCamera(game.player.mesh.position);
   }
 
