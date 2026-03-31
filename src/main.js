@@ -10,7 +10,7 @@ scene.fog = new THREE.Fog(0x87ceeb, 30, 60);
 
 // Camera — fixed elevated view from back-right corner of player's side
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
-camera.position.set(8, 10, 10);
+camera.position.set(0, 10, 13);
 camera.lookAt(0, 1, 0);
 
 // Renderer
