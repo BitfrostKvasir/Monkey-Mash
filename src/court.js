@@ -37,6 +37,10 @@ export function buildCourt(scene) {
   addLine(lw, COURT.depth,  hw, 0);
   // Center line (under net)
   addLine(COURT.width, lw, 0, 0);
+  // Attack lines — 2/3 from the back (1/3 from net) on each side
+  const attackZ = hd * (1 / 3); // = 3 units from net
+  addLine(COURT.width, lw, 0,  attackZ);
+  addLine(COURT.width, lw, 0, -attackZ);
 
   // Net posts
   const postGeo = new THREE.CylinderGeometry(0.05, 0.05, COURT.netHeight + 0.3);
