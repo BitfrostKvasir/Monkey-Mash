@@ -7,10 +7,10 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb); // sky blue
 scene.fog = new THREE.Fog(0x87ceeb, 30, 60);
 
-// Camera — third-person behind the player side
+// Camera — elevated view from above the player's (right) side
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
-camera.position.set(0, 6, 14);
-camera.lookAt(0, 1, 0);
+camera.position.set(0, 14, 7);
+camera.lookAt(0, 0, -2);
 
 // Renderer
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -58,9 +58,9 @@ function loop() {
 
   game.update(dt, now);
 
-  // Smooth camera to follow player X position
+  // Smooth camera to loosely follow player X position
   const px = game.player.mesh.position.x;
-  camera.position.x = THREE.MathUtils.lerp(camera.position.x, px * 0.4, 0.05);
+  camera.position.x = THREE.MathUtils.lerp(camera.position.x, px * 0.25, 0.05);
 
   renderer.render(scene, camera);
 }
