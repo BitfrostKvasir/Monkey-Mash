@@ -20,10 +20,18 @@ export class Player {
 
     this._jumpPressedLast = false;
     this._mouseWasDown = false;
+    this._rightMouseWasDown = false;
     this.wantsPass = false;
     this._passAnimTimer = 0;
     this._camAzimuth = 0;
     this._hitCooldown = 0;
+
+    // Dive state
+    this.isDiving = false;
+    this._diveTimer = 0;
+    this._diveCooldown = 0;
+    this._diveDir = new THREE.Vector3();
+    this._leanX = 0;
 
     // Animated limb groups (set in _buildMesh)
     this._rightArm = null;
@@ -208,7 +216,13 @@ export class Player {
     let tRA = 0, tLA = 0; // target arm rotation.z (right, left)
     let tRL = 0, tLL = 0; // target leg rotation.x (right, left)
 
-    if (this.isSpiking) {
+    if (this.isDiving) {
+      // Both arms stretch forward (down toward ground in world space = arms out front)
+      tRA =  Math.PI / 4;
+      tLA = -Math.PI / 4;
+      tRL =  0.3;
+      tLL =  0.3;
+    } else if (this.isSpiking) {
       // Right hand drives down, left hand stays up
       tRA = -Math.PI / 2;
       tLA = -Math.PI / 2;
@@ -262,6 +276,21 @@ export class Player {
       this.isAirborne = true;
     }
 
+    // Dive slide deceleration + timer
+    if (this.isDiving) {
+      this._diveTimer -= dt;
+      const drag = Math.pow(0.18, dt); // aggressive friction
+      this.velocity.x *= drag;
+      this.velocity.z *= drag;
+      if (this._diveTimer <= 0) {
+        this.isDiving = false;
+        this._diveCooldown = 1.0;
+        this.velocity.x = 0;
+        this.velocity.z = 0;
+      }
+    }
+    if (this._diveCooldown > 0) this._diveCooldown -= dt;
+
     const halfDepth = 9;
     const minZ = this.side === 1 ? 0.4 : -halfDepth;
     const maxZ = this.side === 1 ? halfDepth : -0.4;
@@ -274,6 +303,11 @@ export class Player {
     } else {
       this.mesh.rotation.z = THREE.MathUtils.lerp(this.mesh.rotation.z, 0, 10 * dt);
     }
+
+    // Dive lean — tilt body forward along the dive direction
+    const targetLean = this.isDiving ? -0.72 : 0;
+    this._leanX = THREE.MathUtils.lerp(this._leanX, targetLean, Math.min(1, 14 * dt));
+    this.mesh.rotation.x = this._leanX;
 
     // Shift-lock facing
     if (this.isHuman) {
@@ -330,9 +364,23 @@ export class Player {
     const mouseDown = inp.isMouseDown(0);
     if (mouseDown && !this._mouseWasDown) {
       this.wantsPass = true;
-      this._passAnimTimer = 0.45; // play pass animation for 0.45 s
+      this._passAnimTimer = 0.45;
     }
     this._mouseWasDown = mouseDown;
+
+    // Right click → dive in movement direction
+    const rmbDown = inp.isMouseDown(2);
+    if (rmbDown && !this._rightMouseWasDown && !this.isDiving && this._diveCooldown <= 0 && !this.isAirborne) {
+      let dx = mx, dz = mz; // reuse already-computed movement direction
+      if (dx === 0 && dz === 0) { dx = fwdX; dz = fwdZ; } // default: dive forward
+      const dlen = Math.sqrt(dx * dx + dz * dz);
+      this._diveDir.set(dx / dlen, 0, dz / dlen);
+      this.isDiving = true;
+      this._diveTimer = 0.55;
+      this.velocity.x = this._diveDir.x * 15;
+      this.velocity.z = this._diveDir.z * 15;
+    }
+    this._rightMouseWasDown = rmbDown;
   }
 
   _handleAI(dt, ball) {

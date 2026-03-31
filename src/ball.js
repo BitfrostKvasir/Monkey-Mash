@@ -140,7 +140,7 @@ export class Ball {
     // Determine if this contact should register
     const isPass  = player.wantsPass && dist < PASS_RADIUS + BALL_RADIUS;
     const isSpike = player.isSpiking && player.isAirborne && dist < SPIKE_RADIUS + BALL_RADIUS;
-    const isAuto  = !player.isHuman && dist < SPIKE_RADIUS + BALL_RADIUS;
+    const isAuto  = (!player.isHuman || player.isDiving) && dist < PASS_RADIUS + BALL_RADIUS;
 
     if (!isPass && !isSpike && !isAuto) return null;
 
