@@ -104,16 +104,24 @@ export class Ball {
       pos.y = BALL_RADIUS;
       this.inPlay = false;
 
+      if (this.lastTouchedSide === 0) return null;
+
       const hw = COURT.width / 2;
       const hd = COURT.depth / 2;
-      const inBounds = Math.abs(pos.x) <= hw && Math.abs(pos.z) <= hd;
 
-      if (inBounds) {
-        // Lands in bounds: the side it landed on loses
-        return pos.z >= 0 ? 'right' : 'left';
+      // Ball must land inside the OPPONENT's half (opposite sign of last toucher).
+      // Any other outcome (own side, out of bounds, net line) = last toucher loses.
+      const opponentSign = -this.lastTouchedSide; // e.g. player hit (1) → must land at z < 0 (-1)
+      const landedInOpponentCourt =
+        Math.sign(pos.z) === Math.sign(opponentSign) &&
+        Math.abs(pos.x) <= hw &&
+        Math.abs(pos.z) <= hd;
+
+      if (landedInOpponentCourt) {
+        // Opponent's half received the ball — they couldn't return it, they lose
+        return sideStr(opponentSign); // opponent's side loses
       } else {
-        // Out of bounds: whoever last touched it loses
-        if (this.lastTouchedSide === 0) return null;
+        // Didn't land in opponent's court — last toucher loses
         return sideStr(this.lastTouchedSide);
       }
     }
