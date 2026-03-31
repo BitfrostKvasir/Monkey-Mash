@@ -1,19 +1,19 @@
 import * as THREE from 'three';
-import { Game } from './game.js';
+import { Game }   from './game.js';
 import { InputManager } from './input.js';
-import { Menu } from './menu.js';
+import { Menu }   from './menu.js';
 
-// Scene
+// ── Scene ─────────────────────────────────────────────────────────
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87ceeb);
-scene.fog = new THREE.Fog(0x87ceeb, 30, 60);
+scene.background = new THREE.Color(0x1a2a1a);
+scene.fog = new THREE.Fog(0x1a2a1a, 25, 45);
 
-// Camera — fixed elevated view from back-right corner of player's side
-const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
-camera.position.set(0, 10, 13);
-camera.lookAt(0, 1, 0);
+// ── Top-down camera ───────────────────────────────────────────────
+const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 100);
+camera.position.set(0, 18, 4);
+camera.lookAt(0, 0, 0);
 
-// Renderer
+// ── Renderer ──────────────────────────────────────────────────────
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(window.devicePixelRatio);
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -21,48 +21,108 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
-// Lighting
-const ambient = new THREE.AmbientLight(0xffffff, 0.5);
-scene.add(ambient);
+// ── Lighting ──────────────────────────────────────────────────────
+scene.add(new THREE.AmbientLight(0xffffff, 0.6));
 
-const sun = new THREE.DirectionalLight(0xffffff, 1.2);
-sun.position.set(10, 20, 10);
+const sun = new THREE.DirectionalLight(0xffffff, 1.0);
+sun.position.set(8, 20, 8);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
 sun.shadow.camera.near = 0.5;
-sun.shadow.camera.far = 60;
-sun.shadow.camera.left = -15;
-sun.shadow.camera.right = 15;
-sun.shadow.camera.top = 15;
-sun.shadow.camera.bottom = -15;
+sun.shadow.camera.far  = 60;
+sun.shadow.camera.left = sun.shadow.camera.bottom = -20;
+sun.shadow.camera.right = sun.shadow.camera.top   =  20;
 scene.add(sun);
 
-// Resize handler
+// ── Resize ────────────────────────────────────────────────────────
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-const input = new InputManager();
-let game = null;
-let last = performance.now();
+// ── Mouse NDC tracking ────────────────────────────────────────────
+const mouseNDC = new THREE.Vector2();
+window.addEventListener('mousemove', e => {
+  mouseNDC.x =  (e.clientX / window.innerWidth)  * 2 - 1;
+  mouseNDC.y = -(e.clientY / window.innerHeight) * 2 + 1;
+});
 
+// ── HUD elements ──────────────────────────────────────────────────
+const hpFill      = document.getElementById('hp-fill');
+const bananaCount = document.getElementById('banana-count');
+const roomNumEl   = document.getElementById('room-num');
+const roomClearEl = document.getElementById('room-clear');
+const gameOverEl  = document.getElementById('gameover-overlay');
+const tryAgainBtn = document.getElementById('btn-try-again');
+
+// ── Game state ────────────────────────────────────────────────────
+const input = new InputManager();
+let game    = null;
+let camTarget = new THREE.Vector3();
+let last   = performance.now();
+
+// Camera smooth follow
+const CAM_OFFSET = new THREE.Vector3(0, 18, 4);
+const CAM_LERP   = 0.08;
+
+function startGame(config) {
+  if (game) {
+    // Clean up previous game if restarting
+    scene.clear();
+    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+    scene.add(sun);
+  }
+
+  game = new Game(scene, input, config);
+
+  game.onRoomClear = (roomNum) => {
+    roomClearEl.style.opacity = '1';
+    setTimeout(() => { roomClearEl.style.opacity = '0'; }, 1800);
+  };
+
+  game.onGameOver = () => {
+    gameOverEl.style.display = 'flex';
+  };
+
+  document.getElementById('hud').style.display = 'block';
+  gameOverEl.style.display = 'none';
+}
+
+tryAgainBtn?.addEventListener('click', () => {
+  gameOverEl.style.display = 'none';
+  startGame({ color: 0x7B3F00, hat: 'none' });
+});
+
+// ── Render loop ───────────────────────────────────────────────────
 function loop() {
   requestAnimationFrame(loop);
   const now = performance.now() / 1000;
-  const dt = Math.min((performance.now() - last) / 1000, 0.05);
+  const dt  = Math.min((performance.now() - last) / 1000, 0.05);
   last = performance.now();
 
-  if (game) game.update(dt, now);
+  if (game) {
+    game.update(dt, now, camera, mouseNDC);
+
+    // Smooth camera follow player
+    const pp = game.player.position;
+    camTarget.set(pp.x + CAM_OFFSET.x, CAM_OFFSET.y, pp.z + CAM_OFFSET.z);
+    camera.position.lerp(camTarget, CAM_LERP);
+    camera.lookAt(pp.x, 0, pp.z);
+
+    // Update HUD
+    const hp = game.player.hp / game.player.maxHp;
+    if (hpFill) hpFill.style.width = (hp * 100).toFixed(1) + '%';
+    if (bananaCount) bananaCount.textContent = '🍌 ' + game.player.bananas;
+    if (roomNumEl) roomNumEl.textContent = 'Room ' + game.getRoomNumber();
+  }
 
   renderer.render(scene, camera);
 }
 
 loop();
 
+// ── Menu ──────────────────────────────────────────────────────────
 new Menu((config) => {
-  document.getElementById('ui').style.display = 'flex';
-  document.getElementById('controls').style.display = 'block';
-  game = new Game(scene, input, config);
+  startGame(config);
 });

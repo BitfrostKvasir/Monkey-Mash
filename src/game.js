@@ -1,168 +1,119 @@
-import { Ball } from './ball.js';
-import { Player } from './player.js';
-import { buildCourt } from './court.js';
-import { DIFFICULTIES } from './menu.js';
+import * as THREE from 'three';
+import { Player }    from './player.js';
+import { Room }      from './room.js';
+import { BananaDrop } from './pickup.js';
 
-const WIN_SCORE = 25;
-const POINT_MSG_DURATION = 1.5; // seconds to show "Point!" before entering serve phase
-const AI_SERVE_DELAY = 1.2;     // seconds before AI tosses
+const CLEAR_DELAY      = 2.0;  // seconds between room cleared and next room loading
+const BANANA_DROP_CHANCE = 0.6; // per enemy
 
 export class Game {
   constructor(scene, input, config = {}) {
-    this.scene = scene;
-    this.input = input;
+    this.scene   = scene;
+    this.input   = input;
+    this.isOver  = false;
+    this._roomNumber = 1;
+    this._clearTimer = 0;
+    this._transitioning = false;
+    this.onRoomClear  = null; // callback(roomNumber)
+    this.onGameOver   = null;
 
-    const { difficulty = 'medium', color, hat = 'none' } = config;
-    const aiConfig = DIFFICULTIES[difficulty] ?? DIFFICULTIES.medium;
+    const { color = 0x7B3F00, hat = 'none' } = config;
 
-    this.scores = { player: 0, opponent: 0 };
-    this._over = false;
+    this.player  = new Player(scene, input, color, hat);
+    this.room    = new Room(scene, this._roomNumber);
+    this.pickups = [];
 
-    // 'point'   — showing point message, waiting before serve phase
-    // 'serving' — server at baseline, waiting for G (or AI timer)
-    // 'rally'   — ball in play
-    this._state = 'serving';
+    // Ground plane for mouse raycasting
+    this._groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    this._raycaster   = new THREE.Raycaster();
+    this._aimTarget   = new THREE.Vector3();
 
-    this._pointTimer = 0;
-    this._aiServeTimer = 0;
-    this._gPressedLast = false;
-
-    // 1 = player serves, -1 = opponent serves
-    this._servingSide = 1;
-
-    buildCourt(scene);
-
-    this.ball = new Ball(scene);
-    this.player   = new Player(scene, { side:  1, isHuman: true,  input, color, hat });
-    this.opponent = new Player(scene, { side: -1, isHuman: false, aiConfig });
-
-    this.player._hitCooldown   = 0;
-    this.opponent._hitCooldown = 0;
-
-    this._scoreEl = {
-      player:   document.getElementById('score-right'),
-      opponent: document.getElementById('score-left'),
-    };
-    this._msgEl = document.getElementById('message');
-
-    // Start game in serve phase
-    this._enterServingPhase();
+    // Mouse state
+    this._lmbWas  = false;
   }
 
-  // ── State transitions ────────────────────────────────────────────
+  // ── Update ───────────────────────────────────────────────────────
 
-  _enterServingPhase() {
-    this._state = 'serving';
-    this._gPressedLast = false;
-    this._aiServeTimer = AI_SERVE_DELAY;
-    this.ball.inPlay = false;
+  update(dt, now, camera, mouseNDC) {
+    if (this.isOver) return;
 
-    // Teleport server to back baseline centre, receiver to mid-court
-    const server   = this._servingSide === 1 ? this.player   : this.opponent;
-    const receiver = this._servingSide === 1 ? this.opponent : this.player;
+    // Aim via raycast
+    if (mouseNDC && camera) {
+      this._raycaster.setFromCamera(mouseNDC, camera);
+      this._raycaster.ray.intersectPlane(this._groundPlane, this._aimTarget);
+    }
 
-    server.mesh.position.set(0, 0, this._servingSide * 8.5);
-    server.velocity.set(0, 0, 0);
-    server.isAirborne = false;
+    this.player.update(dt, now, this._aimTarget);
 
-    receiver.mesh.position.set(0, 0, -this._servingSide * 4);
-    receiver.velocity.set(0, 0, 0);
-    receiver.isAirborne = false;
+    if (!this.player.isAlive) {
+      this.isOver = true;
+      if (this.onGameOver) this.onGameOver();
+      return;
+    }
 
-    if (this._servingSide === 1) {
-      this._showMessage('Press G to serve', true);
+    // Left-click attack
+    const lmb = this.input.isMouseDown(0);
+    if (lmb && !this._lmbWas) {
+      this.player.attack(this.room.enemies);
+    }
+    this._lmbWas = lmb;
+
+    // Room update
+    if (!this._transitioning) {
+      this.room.update(dt, this.player);
+      this.room.clampPlayer(this.player);
+
+      if (this.room.isCleared && this._clearTimer <= 0) {
+        this._transitioning = true;
+        this._clearTimer = CLEAR_DELAY;
+        if (this.onRoomClear) this.onRoomClear(this._roomNumber);
+      }
     } else {
-      this._showMessage('Opponent serving…', true);
-    }
-  }
-
-  _toss() {
-    const server = this._servingSide === 1 ? this.player : this.opponent;
-    this.ball.tossFrom(server.mesh.position, this._servingSide);
-    this._state = 'rally';
-    this._hideMessage();
-  }
-
-  // ── Main update ──────────────────────────────────────────────────
-
-  update(dt, now, camAzimuth = 0) {
-    if (this._over) return;
-
-    if (this._state === 'point') {
-      this._pointTimer -= dt;
-      if (this._pointTimer <= 0) {
-        this._enterServingPhase();
+      this._clearTimer -= dt;
+      if (this._clearTimer <= 0) {
+        this._nextRoom();
+        this._transitioning = false;
       }
-      return;
     }
 
-    if (this._state === 'serving') {
-      // Both players can move freely while waiting for serve
-      this.player.update(dt, now, null, camAzimuth);
-      this.opponent.update(dt, now, null);
+    // Pickups
+    for (let i = this.pickups.length - 1; i >= 0; i--) {
+      const p = this.pickups[i];
+      p.update(dt, this.player);
+      if (p.collected) this.pickups.splice(i, 1);
+    }
+  }
 
-      if (this._servingSide === 1) {
-        const g = this.input.isDown('KeyG');
-        if (g && !this._gPressedLast) this._toss();
-        this._gPressedLast = g;
-      } else {
-        this._aiServeTimer -= dt;
-        if (this._aiServeTimer <= 0) this._toss();
+  // ── Room transitions ─────────────────────────────────────────────
+
+  _nextRoom() {
+    // Drop bananas for cleared enemies
+    this._spawnBananasForRoom();
+
+    this.room.destroy();
+    this._roomNumber++;
+    this.room = new Room(this.scene, this._roomNumber);
+
+    // Reset player to centre
+    this.player.mesh.position.set(0, 0, 0);
+    this.player.velocity.set(0, 0, 0);
+  }
+
+  _spawnBananasForRoom() {
+    for (const enemy of this.room.enemies) {
+      if (!enemy.isDead) continue;
+      if (Math.random() < BANANA_DROP_CHANCE) {
+        const drop = new BananaDrop(
+          this.scene,
+          enemy.mesh.position.x + (Math.random() - 0.5),
+          enemy.mesh.position.z + (Math.random() - 0.5)
+        );
+        this.pickups.push(drop);
       }
-      return;
     }
-
-    // ── Rally ──
-    this.player.update(dt, now, this.ball, camAzimuth);
-    this.opponent.update(dt, now, this.ball);
-
-    const loser = this.ball.update(dt, [this.player, this.opponent]);
-
-    if (loser) {
-      if (loser === 'right') {
-        this.scores.opponent++;
-        this._showMessage('Opponent scores!');
-        if (this._servingSide === 1) this._servingSide = -1;
-      } else {
-        this.scores.player++;
-        this._showMessage('Point!');
-        if (this._servingSide === -1) this._servingSide = 1;
-      }
-
-      this._updateScoreUI();
-
-      if (this.scores.player >= WIN_SCORE || this.scores.opponent >= WIN_SCORE) {
-        const msg = this.scores.player >= WIN_SCORE ? 'You Win!' : 'Opponent Wins!';
-        this._showMessage(msg, true);
-        this._over = true;
-        return;
-      }
-
-      this._state = 'point';
-      this._pointTimer = POINT_MSG_DURATION;
-    }
+    // Clear leftover pickups from previous room that weren't collected
+    // (they'll be destroyed when room is destroyed; we clear the list)
   }
 
-  // ── UI helpers ───────────────────────────────────────────────────
-
-  _updateScoreUI() {
-    if (this._scoreEl.player)   this._scoreEl.player.textContent   = this.scores.player;
-    if (this._scoreEl.opponent) this._scoreEl.opponent.textContent = this.scores.opponent;
-  }
-
-  _showMessage(text, persist = false) {
-    if (!this._msgEl) return;
-    clearTimeout(this._msgTimeout);
-    this._msgEl.textContent = text;
-    this._msgEl.style.opacity = '1';
-    if (!persist) {
-      this._msgTimeout = setTimeout(() => { this._msgEl.style.opacity = '0'; }, 1500);
-    }
-  }
-
-  _hideMessage() {
-    if (!this._msgEl) return;
-    clearTimeout(this._msgTimeout);
-    this._msgEl.style.opacity = '0';
-  }
+  getRoomNumber() { return this._roomNumber; }
 }

@@ -9,84 +9,150 @@
       body { background: #000; overflow: hidden; }
       canvas { display: block; }
 
-      #ui {
+      /* ── HUD ─────────────────────────────────────────────────── */
+      #hud {
+        display: none;
         position: fixed;
-        top: 0; left: 0; right: 0;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        padding: 16px;
-        gap: 40px;
+        inset: 0;
         pointer-events: none;
         font-family: 'Arial Black', sans-serif;
-        color: #fff;
-        text-shadow: 2px 2px 4px #000;
       }
 
-      .score-box {
-        text-align: center;
+      /* HP bar — top left */
+      #hp-bar {
+        position: absolute;
+        top: 16px; left: 16px;
+        width: 200px;
       }
-
-      .score-box .team {
-        font-size: 14px;
-        opacity: 0.8;
+      #hp-label {
+        font-size: 11px;
         letter-spacing: 2px;
+        color: rgba(255,255,255,0.7);
+        margin-bottom: 4px;
         text-transform: uppercase;
       }
-
-      .score-box .score {
-        font-size: 64px;
-        line-height: 1;
+      #hp-track {
+        width: 100%;
+        height: 14px;
+        background: rgba(0,0,0,0.5);
+        border-radius: 7px;
+        border: 1px solid rgba(255,255,255,0.2);
+        overflow: hidden;
+      }
+      #hp-fill {
+        height: 100%;
+        width: 100%;
+        background: linear-gradient(90deg, #cc2222, #ff4444);
+        border-radius: 7px;
+        transition: width 0.1s;
       }
 
-      #divider {
-        font-size: 48px;
-        opacity: 0.5;
+      /* Banana count — top right */
+      #banana-count {
+        position: absolute;
+        top: 16px; right: 16px;
+        font-size: 22px;
+        color: #ffe135;
+        text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+        letter-spacing: 1px;
       }
 
-      #message {
-        position: fixed;
-        top: 50%; left: 50%;
-        transform: translate(-50%, -50%);
-        font-family: 'Arial Black', sans-serif;
-        font-size: 48px;
-        color: #fff;
-        text-shadow: 3px 3px 6px #000;
-        pointer-events: none;
-        opacity: 0;
-        transition: opacity 0.3s;
-      }
-
-      #controls {
-        position: fixed;
-        bottom: 16px;
+      /* Room number — top center */
+      #room-num {
+        position: absolute;
+        top: 16px;
         left: 50%;
         transform: translateX(-50%);
-        font-family: Arial, sans-serif;
-        font-size: 12px;
+        font-size: 14px;
+        letter-spacing: 4px;
+        text-transform: uppercase;
         color: rgba(255,255,255,0.5);
-        text-align: center;
-        pointer-events: none;
+        text-shadow: 0 2px 6px rgba(0,0,0,0.8);
+      }
+
+      /* Room cleared message — center */
+      #room-clear {
+        position: absolute;
+        top: 40%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 42px;
+        color: #88ff44;
+        text-shadow: 0 3px 16px rgba(100,255,50,0.7);
+        letter-spacing: 3px;
+        text-transform: uppercase;
+        opacity: 0;
+        transition: opacity 0.3s;
+        white-space: nowrap;
+      }
+
+      /* Game over overlay */
+      #gameover-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0,0,0,0.75);
+        z-index: 50;
+        font-family: 'Arial Black', sans-serif;
+      }
+      #gameover-title {
+        font-size: clamp(48px, 10vw, 80px);
+        color: #ff3333;
+        text-shadow: 0 4px 24px rgba(255,0,0,0.6);
+        letter-spacing: 4px;
+        text-transform: uppercase;
+        margin-bottom: 12px;
+      }
+      #gameover-sub {
+        font-size: 16px;
+        color: rgba(255,255,255,0.5);
+        letter-spacing: 4px;
+        text-transform: uppercase;
+        font-family: Arial, sans-serif;
+        font-weight: normal;
+        margin-bottom: 48px;
+      }
+      #btn-try-again {
+        font-family: 'Arial Black', sans-serif;
+        font-size: 18px;
+        letter-spacing: 3px;
+        text-transform: uppercase;
+        padding: 14px 48px;
+        border: none;
+        border-radius: 50px;
+        cursor: pointer;
+        background: linear-gradient(135deg, #ff5500, #ff2200);
+        color: #fff;
+        box-shadow: 0 6px 28px rgba(255,60,0,0.5);
+        transition: transform 0.1s, box-shadow 0.1s;
+      }
+      #btn-try-again:hover {
+        transform: scale(1.07);
+        box-shadow: 0 8px 36px rgba(255,60,0,0.8);
       }
     </style>
   </head>
   <body>
-    <div id="ui" style="display:none;">
-      <div class="score-box">
-        <div class="team">You</div>
-        <div class="score" id="score-left">0</div>
+
+    <!-- HUD -->
+    <div id="hud">
+      <div id="hp-bar">
+        <div id="hp-label">HP</div>
+        <div id="hp-track"><div id="hp-fill"></div></div>
       </div>
-      <div id="divider">:</div>
-      <div class="score-box">
-        <div class="team">Opponent</div>
-        <div class="score" id="score-right">0</div>
-      </div>
+      <div id="banana-count">🍌 0</div>
+      <div id="room-num">Room 1</div>
+      <div id="room-clear">Room Cleared!</div>
     </div>
 
-    <div id="message"></div>
-
-    <div id="controls" style="display:none;">
-      WASD — Move &nbsp;|&nbsp; G — Serve &nbsp;|&nbsp; LClick — Pass &nbsp;|&nbsp; RClick — Dive &nbsp;|&nbsp; Space — Jump &nbsp;|&nbsp; Space (air) — Spike &nbsp;|&nbsp; A/D — Curve
+    <!-- Game Over -->
+    <div id="gameover-overlay">
+      <div id="gameover-title">Game Over</div>
+      <div id="gameover-sub">The jungle got you</div>
+      <button id="btn-try-again">Try Again</button>
     </div>
 
     <script type="module" src="/src/main.js"></script>
