@@ -1,16 +1,25 @@
 import { Ball } from './ball.js';
 import { Player } from './player.js';
 import { buildCourt } from './court.js';
+import { DIFFICULTIES } from './menu.js';
 
 const WIN_SCORE = 25;
-const RESET_DELAY = 2.0; // seconds before next serve after a point
+const RESET_DELAY = 2.0;
 
 export class Game {
-  constructor(scene, input) {
+  /**
+   * @param {THREE.Scene} scene
+   * @param {InputManager} input
+   * @param {{ difficulty: string, color: number, hat: string }} config
+   */
+  constructor(scene, input, config = {}) {
     this.scene = scene;
     this.input = input;
 
-    this.scores = { left: 0, right: 0 }; // left = opponent (AI), right = player
+    const { difficulty = 'medium', color, hat = 'none' } = config;
+    const aiConfig = DIFFICULTIES[difficulty] ?? DIFFICULTIES.medium;
+
+    this.scores = { left: 0, right: 0 };
     this._resetTimer = 0;
     this._pendingServe = false;
     this._serveSide = 1;
@@ -19,13 +28,9 @@ export class Game {
     buildCourt(scene);
 
     this.ball = new Ball(scene);
+    this.player = new Player(scene, { side: 1, isHuman: true, input, color, hat });
+    this.opponent = new Player(scene, { side: -1, isHuman: false, aiConfig });
 
-    // Player is on positive Z (right/south side), side=1
-    this.player = new Player(scene, { side: 1, isHuman: true, input });
-    // AI on negative Z (left/north side), side=-1
-    this.opponent = new Player(scene, { side: -1, isHuman: false });
-
-    // Serve to start
     this._startServe(1);
 
     this._scoreEl = {
@@ -58,8 +63,6 @@ export class Game {
     const scored = this.ball.update(dt, [this.player, this.opponent]);
 
     if (scored) {
-      // 'left' means the ball landed on left/opponent side → player scores
-      // 'right' means ball landed on right/player side → opponent scores
       if (scored === 'left') {
         this.scores.right++;
         this._showMessage('Point!');

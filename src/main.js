@@ -1,10 +1,11 @@
 import * as THREE from 'three';
 import { Game } from './game.js';
 import { InputManager } from './input.js';
+import { Menu } from './menu.js';
 
 // Scene
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87ceeb); // sky blue
+scene.background = new THREE.Color(0x87ceeb);
 scene.fog = new THREE.Fog(0x87ceeb, 30, 60);
 
 // Camera — elevated view from above the player's (right) side
@@ -36,10 +37,6 @@ sun.shadow.camera.top = 15;
 sun.shadow.camera.bottom = -15;
 scene.add(sun);
 
-// Input & Game
-const input = new InputManager();
-const game = new Game(scene, input);
-
 // Resize handler
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -47,7 +44,13 @@ window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-// Game loop
+// Input
+const input = new InputManager();
+
+// Game instance (created after menu)
+let game = null;
+
+// Render loop runs immediately so the court preview shows behind the menu
 let last = performance.now();
 
 function loop() {
@@ -56,13 +59,24 @@ function loop() {
   const dt = Math.min((performance.now() - last) / 1000, 0.05);
   last = performance.now();
 
-  game.update(dt, now);
+  if (game) {
+    game.update(dt, now);
 
-  // Smooth camera to loosely follow player X position
-  const px = game.player.mesh.position.x;
-  camera.position.x = THREE.MathUtils.lerp(camera.position.x, px * 0.25, 0.05);
+    // Loosely follow player X
+    const px = game.player.mesh.position.x;
+    camera.position.x = THREE.MathUtils.lerp(camera.position.x, px * 0.25, 0.05);
+  }
 
   renderer.render(scene, camera);
 }
 
 loop();
+
+// Show menu — game starts when player clicks Play through all screens
+new Menu((config) => {
+  // Show the in-game HUD
+  document.getElementById('ui').style.display = 'flex';
+  document.getElementById('controls').style.display = 'block';
+
+  game = new Game(scene, input, config);
+});
