@@ -85,7 +85,7 @@ export class Room {
 
   update(dt, player) {
     for (const enemy of this.enemies) {
-      if (!enemy.isDead) enemy.update(dt, player);
+      if (!enemy.isDead) enemy.update(dt, player, this.enemies);
     }
 
     if (!this.isCleared && this.enemies.every(e => e.isDead)) {

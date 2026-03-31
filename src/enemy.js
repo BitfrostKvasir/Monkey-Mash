@@ -1,9 +1,11 @@
 import * as THREE from 'three';
 
-const GRUNT_SPEED  = 3.5;
-const GRUNT_DAMAGE = 12;
+const GRUNT_SPEED  = 2.0;
+const GRUNT_DAMAGE = 10;
 const GRUNT_HP     = 60;
-const CONTACT_CD   = 0.8;
+const CONTACT_CD   = 1.2;
+const SEPARATION_RADIUS = 1.2;
+const SEPARATION_FORCE  = 3.0;
 
 export class GruntEnemy {
   constructor(scene, x, z) {
@@ -106,7 +108,7 @@ export class GruntEnemy {
     this.scene.remove(this.mesh);
   }
 
-  update(dt, player) {
+  update(dt, player, allEnemies = []) {
     if (this.isDead) return;
 
     // Cooldowns
@@ -122,6 +124,19 @@ export class GruntEnemy {
     // Knockback decay
     this.velocity.x *= Math.pow(0.05, dt);
     this.velocity.z *= Math.pow(0.05, dt);
+
+    // Separation — push away from nearby enemies so they don't stack
+    for (const other of allEnemies) {
+      if (other === this || other.isDead) continue;
+      const sx = this.mesh.position.x - other.mesh.position.x;
+      const sz = this.mesh.position.z - other.mesh.position.z;
+      const sd = Math.sqrt(sx * sx + sz * sz);
+      if (sd > 0 && sd < SEPARATION_RADIUS) {
+        const push = (SEPARATION_RADIUS - sd) / SEPARATION_RADIUS * SEPARATION_FORCE;
+        this.velocity.x += (sx / sd) * push * dt;
+        this.velocity.z += (sz / sd) * push * dt;
+      }
+    }
 
     // Move toward player
     const dx = player.position.x - this.mesh.position.x;
