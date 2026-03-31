@@ -191,9 +191,9 @@ export class Ball {
   }
 
   _applySpikeForce(player) {
-    const baseZ = -player.side * (14 + Math.random() * 4);
-    const baseY = -2;
-    let baseX = (Math.random() - 0.5) * 5;
+    const baseZ = -player.side * (10 + Math.random() * 3);
+    const baseY = 3;
+    let baseX = (Math.random() - 0.5) * 4;
 
     if (player.curveLeft) baseX -= 4;
     if (player.curveRight) baseX += 4;
