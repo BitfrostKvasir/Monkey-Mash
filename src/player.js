@@ -33,6 +33,7 @@ export class Player {
     this._lastJumpTime = -999;
     this._doubleJumped = false;
     this._mouseWasDown = false;
+    this._hitCooldown = 0; // managed by ball.js to prevent multi-frame contacts
 
     const bodyColor = color ?? (side === 1 ? 0xc8860a : 0x2266cc);
     this.mesh = this._buildMesh(scene, side, bodyColor, hat);

@@ -7,11 +7,6 @@ const WIN_SCORE = 25;
 const RESET_DELAY = 2.0;
 
 export class Game {
-  /**
-   * @param {THREE.Scene} scene
-   * @param {InputManager} input
-   * @param {{ difficulty: string, color: number, hat: string }} config
-   */
   constructor(scene, input, config = {}) {
     this.scene = scene;
     this.input = input;
@@ -19,30 +14,37 @@ export class Game {
     const { difficulty = 'medium', color, hat = 'none' } = config;
     const aiConfig = DIFFICULTIES[difficulty] ?? DIFFICULTIES.medium;
 
-    this.scores = { left: 0, right: 0 };
+    this.scores = { player: 0, opponent: 0 };
     this._resetTimer = 0;
     this._pendingServe = false;
-    this._serveSide = 1;
     this._over = false;
+
+    // Track who is currently serving: 1 = player, -1 = opponent
+    // Serve only switches when the RECEIVER wins the rally (side-out rule)
+    this._servingSide = 1;
 
     buildCourt(scene);
 
     this.ball = new Ball(scene);
-    this.player = new Player(scene, { side: 1, isHuman: true, input, color, hat });
+    this.player   = new Player(scene, { side:  1, isHuman: true,  input, color, hat });
     this.opponent = new Player(scene, { side: -1, isHuman: false, aiConfig });
 
-    this._startServe(1);
+    // Initialise per-player hit cooldowns (used by ball.js)
+    this.player._hitCooldown   = 0;
+    this.opponent._hitCooldown = 0;
+
+    this._startServe();
 
     this._scoreEl = {
-      left: document.getElementById('score-left'),
-      right: document.getElementById('score-right'),
+      player:   document.getElementById('score-right'),
+      opponent: document.getElementById('score-left'),
     };
     this._msgEl = document.getElementById('message');
   }
 
-  _startServe(side) {
-    this.ball.reset(side);
-    this.ball.serve(side);
+  _startServe() {
+    this.ball.reset(this._servingSide);
+    this.ball.serve(this._servingSide);
   }
 
   update(dt, now) {
@@ -52,7 +54,7 @@ export class Game {
       this._resetTimer -= dt;
       if (this._resetTimer <= 0) {
         this._pendingServe = false;
-        this._startServe(this._serveSide);
+        this._startServe();
       }
       return;
     }
@@ -60,24 +62,31 @@ export class Game {
     this.player.update(dt, now, this.ball);
     this.opponent.update(dt, now, this.ball);
 
-    const scored = this.ball.update(dt, [this.player, this.opponent]);
+    // loser: 'right' = player side lost, 'left' = opponent side lost
+    const loser = this.ball.update(dt, [this.player, this.opponent]);
 
-    if (scored) {
-      if (scored === 'left') {
-        this.scores.right++;
-        this._showMessage('Point!');
-        this._serveSide = -1;
-      } else {
-        this.scores.left++;
+    if (loser) {
+      if (loser === 'right') {
+        // Player's side lost → opponent scores
+        this.scores.opponent++;
         this._showMessage('Opponent scores!');
-        this._serveSide = 1;
+        // If player was serving → opponent wins serve (side-out)
+        if (this._servingSide === 1) this._servingSide = -1;
+        // else opponent was already serving → keep
+      } else {
+        // Opponent's side lost → player scores
+        this.scores.player++;
+        this._showMessage('Point!');
+        // If opponent was serving → player wins serve (side-out)
+        if (this._servingSide === -1) this._servingSide = 1;
+        // else player was already serving → keep
       }
 
       this._updateScoreUI();
 
-      if (this.scores.right >= WIN_SCORE || this.scores.left >= WIN_SCORE) {
-        const winner = this.scores.right >= WIN_SCORE ? 'You Win!' : 'Opponent Wins!';
-        this._showMessage(winner, true);
+      if (this.scores.player >= WIN_SCORE || this.scores.opponent >= WIN_SCORE) {
+        const msg = this.scores.player >= WIN_SCORE ? 'You Win!' : 'Opponent Wins!';
+        this._showMessage(msg, true);
         this._over = true;
         return;
       }
@@ -88,8 +97,8 @@ export class Game {
   }
 
   _updateScoreUI() {
-    if (this._scoreEl.left) this._scoreEl.left.textContent = this.scores.left;
-    if (this._scoreEl.right) this._scoreEl.right.textContent = this.scores.right;
+    if (this._scoreEl.player)   this._scoreEl.player.textContent   = this.scores.player;
+    if (this._scoreEl.opponent) this._scoreEl.opponent.textContent = this.scores.opponent;
   }
 
   _showMessage(text, persist = false) {
@@ -100,7 +109,7 @@ export class Game {
       clearTimeout(this._msgTimeout);
       this._msgTimeout = setTimeout(() => {
         this._msgEl.style.opacity = '0';
-      }, 1200);
+      }, 1500);
     }
   }
 }
