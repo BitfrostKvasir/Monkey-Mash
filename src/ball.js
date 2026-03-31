@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { COURT } from './court.js';
 
-const GRAVITY = -12;
+const GRAVITY = -9;
 const BALL_RADIUS = 0.21;
 const AIR_DRAG = 0.995;
 const HIT_COOLDOWN = 0.35;  // seconds before same player can hit again
@@ -192,7 +192,7 @@ export class Ball {
 
   _applySpikeForce(player) {
     const baseZ = -player.side * (14 + Math.random() * 4);
-    const baseY = -8;
+    const baseY = -2;
     let baseX = (Math.random() - 0.5) * 5;
 
     if (player.curveLeft) baseX -= 4;
