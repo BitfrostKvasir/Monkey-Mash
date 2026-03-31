@@ -10,8 +10,8 @@ scene.fog = new THREE.Fog(0x87ceeb, 30, 60);
 
 // Camera — elevated view from above the player's (right) side
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
-camera.position.set(0, 14, 7);
-camera.lookAt(0, 0, -2);
+camera.position.set(8, 10, 10);
+camera.lookAt(0, 1, 0);
 
 // Renderer
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -61,10 +61,6 @@ function loop() {
 
   if (game) {
     game.update(dt, now);
-
-    // Loosely follow player X
-    const px = game.player.mesh.position.x;
-    camera.position.x = THREE.MathUtils.lerp(camera.position.x, px * 0.25, 0.05);
   }
 
   renderer.render(scene, camera);
