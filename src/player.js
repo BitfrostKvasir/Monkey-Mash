@@ -54,6 +54,7 @@ export class Player {
     this._dashJustEnded   = false;
 
     this.onBananaCollect = null; // (worldPos: THREE.Vector3) => void
+    this._arcRotMat = new THREE.Matrix4();
 
     const { group, rightArm, leftArm, rightLeg, leftLeg } = buildMonkeyMesh(color, hat);
     this.mesh      = group;
@@ -236,11 +237,19 @@ export class Player {
       if (c.isMesh && c.material?.emissive) c.material.emissive.setHex(flash ? 0x440000 : 0x000000);
     });
 
-    // Update arc to always track player position and aim
+    // Update arc — use a direct rotation matrix to avoid gimbal lock.
+    // Maps ring's +X → aimDir, +Z → world +Y (ring lies flat), +Y → perp in XZ.
     if (this._arcMesh) {
       this._arcMesh.position.copy(this.mesh.position);
       this._arcMesh.position.y = 0.05;
-      this._arcMesh.rotation.y = Math.atan2(-this.aimDir.z, this.aimDir.x);
+      const ax = this.aimDir.x, az = this.aimDir.z;
+      this._arcRotMat.set(
+        ax,  az, 0, 0,
+         0,   0, 1, 0,
+        az, -ax, 0, 0,
+         0,   0, 0, 1
+      );
+      this._arcMesh.setRotationFromMatrix(this._arcRotMat);
     }
 
     this._animate(dt, now);
@@ -252,7 +261,6 @@ export class Player {
     const geo = new THREE.RingGeometry(0.3, ATK_RANGE, 24, 1, -ATK_ARC / 2, ATK_ARC);
     const mat = new THREE.MeshBasicMaterial({ color: 0xffff44, transparent: true, opacity: 0.18, side: THREE.DoubleSide });
     const mesh = new THREE.Mesh(geo, mat);
-    mesh.rotation.x = -Math.PI / 2;
     return mesh;
   }
 
