@@ -4,7 +4,8 @@ import { buildCourt } from './court.js';
 import { DIFFICULTIES } from './menu.js';
 
 const WIN_SCORE = 25;
-const RESET_DELAY = 2.0;
+const POINT_MSG_DURATION = 1.5; // seconds to show "Point!" before entering serve phase
+const AI_SERVE_DELAY = 1.2;     // seconds before AI tosses
 
 export class Game {
   constructor(scene, input, config = {}) {
@@ -15,12 +16,18 @@ export class Game {
     const aiConfig = DIFFICULTIES[difficulty] ?? DIFFICULTIES.medium;
 
     this.scores = { player: 0, opponent: 0 };
-    this._resetTimer = 0;
-    this._pendingServe = false;
     this._over = false;
 
-    // Track who is currently serving: 1 = player, -1 = opponent
-    // Serve only switches when the RECEIVER wins the rally (side-out rule)
+    // 'point'   — showing point message, waiting before serve phase
+    // 'serving' — server at baseline, waiting for G (or AI timer)
+    // 'rally'   — ball in play
+    this._state = 'serving';
+
+    this._pointTimer = 0;
+    this._aiServeTimer = 0;
+    this._gPressedLast = false;
+
+    // 1 = player serves, -1 = opponent serves
     this._servingSide = 1;
 
     buildCourt(scene);
@@ -29,57 +36,97 @@ export class Game {
     this.player   = new Player(scene, { side:  1, isHuman: true,  input, color, hat });
     this.opponent = new Player(scene, { side: -1, isHuman: false, aiConfig });
 
-    // Initialise per-player hit cooldowns (used by ball.js)
     this.player._hitCooldown   = 0;
     this.opponent._hitCooldown = 0;
-
-    this._startServe();
 
     this._scoreEl = {
       player:   document.getElementById('score-right'),
       opponent: document.getElementById('score-left'),
     };
     this._msgEl = document.getElementById('message');
+
+    // Start game in serve phase
+    this._enterServingPhase();
   }
 
-  _startServe() {
-    this.ball.reset(this._servingSide);
-    this.ball.serve(this._servingSide);
+  // ── State transitions ────────────────────────────────────────────
+
+  _enterServingPhase() {
+    this._state = 'serving';
+    this._gPressedLast = false;
+    this._aiServeTimer = AI_SERVE_DELAY;
+    this.ball.inPlay = false;
+
+    // Teleport server to back baseline centre, receiver to mid-court
+    const server   = this._servingSide === 1 ? this.player   : this.opponent;
+    const receiver = this._servingSide === 1 ? this.opponent : this.player;
+
+    server.mesh.position.set(0, 0, this._servingSide * 8.5);
+    server.velocity.set(0, 0, 0);
+    server.isAirborne = false;
+
+    receiver.mesh.position.set(0, 0, -this._servingSide * 4);
+    receiver.velocity.set(0, 0, 0);
+    receiver.isAirborne = false;
+
+    if (this._servingSide === 1) {
+      this._showMessage('Press G to serve', true);
+    } else {
+      this._showMessage('Opponent serving…', true);
+    }
   }
+
+  _toss() {
+    const server = this._servingSide === 1 ? this.player : this.opponent;
+    this.ball.tossFrom(server.mesh.position, this._servingSide);
+    this._state = 'rally';
+    this._hideMessage();
+  }
+
+  // ── Main update ──────────────────────────────────────────────────
 
   update(dt, now) {
     if (this._over) return;
 
-    if (this._pendingServe) {
-      this._resetTimer -= dt;
-      if (this._resetTimer <= 0) {
-        this._pendingServe = false;
-        this._startServe();
+    if (this._state === 'point') {
+      this._pointTimer -= dt;
+      if (this._pointTimer <= 0) {
+        this._enterServingPhase();
       }
       return;
     }
 
+    if (this._state === 'serving') {
+      // Both players can move freely while waiting for serve
+      this.player.update(dt, now, null);
+      this.opponent.update(dt, now, null);
+
+      if (this._servingSide === 1) {
+        const g = this.input.isDown('KeyG');
+        if (g && !this._gPressedLast) this._toss();
+        this._gPressedLast = g;
+      } else {
+        this._aiServeTimer -= dt;
+        if (this._aiServeTimer <= 0) this._toss();
+      }
+      return;
+    }
+
+    // ── Rally ──
     this.player.update(dt, now, this.ball);
     this.opponent.update(dt, now, this.ball);
 
-    // loser: 'right' = player side lost, 'left' = opponent side lost
     const loser = this.ball.update(dt, [this.player, this.opponent]);
 
     if (loser) {
       if (loser === 'right') {
-        // Player's side lost → opponent scores
         this.scores.opponent++;
         this._showMessage('Opponent scores!');
-        // If player was serving → opponent wins serve (side-out)
         if (this._servingSide === 1) this._servingSide = -1;
-        // else opponent was already serving → keep
       } else {
-        // Opponent's side lost → player scores
         this.scores.player++;
         this._showMessage('Point!');
-        // If opponent was serving → player wins serve (side-out)
         if (this._servingSide === -1) this._servingSide = 1;
-        // else player was already serving → keep
       }
 
       this._updateScoreUI();
@@ -91,10 +138,12 @@ export class Game {
         return;
       }
 
-      this._pendingServe = true;
-      this._resetTimer = RESET_DELAY;
+      this._state = 'point';
+      this._pointTimer = POINT_MSG_DURATION;
     }
   }
+
+  // ── UI helpers ───────────────────────────────────────────────────
 
   _updateScoreUI() {
     if (this._scoreEl.player)   this._scoreEl.player.textContent   = this.scores.player;
@@ -103,13 +152,17 @@ export class Game {
 
   _showMessage(text, persist = false) {
     if (!this._msgEl) return;
+    clearTimeout(this._msgTimeout);
     this._msgEl.textContent = text;
     this._msgEl.style.opacity = '1';
     if (!persist) {
-      clearTimeout(this._msgTimeout);
-      this._msgTimeout = setTimeout(() => {
-        this._msgEl.style.opacity = '0';
-      }, 1500);
+      this._msgTimeout = setTimeout(() => { this._msgEl.style.opacity = '0'; }, 1500);
     }
+  }
+
+  _hideMessage() {
+    if (!this._msgEl) return;
+    clearTimeout(this._msgTimeout);
+    this._msgEl.style.opacity = '0';
   }
 }

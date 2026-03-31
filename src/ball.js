@@ -39,9 +39,23 @@ export class Ball {
   serve(side = 1) {
     this.inPlay = true;
     this.lastTouchedSide = side;
-    this.consecutiveTouches = 1; // serve counts as first touch
+    this.consecutiveTouches = 1;
     this._fault = null;
     this.velocity.set((Math.random() - 0.5) * 2, 8, -side * 6);
+  }
+
+  /** Toss the ball upward from the server's current position (G key serve). */
+  tossFrom(serverPosition, side) {
+    this.mesh.position.set(
+      serverPosition.x,
+      serverPosition.y + 1.8,
+      serverPosition.z
+    );
+    this.velocity.set((Math.random() - 0.5) * 0.5, 7, 0);
+    this.inPlay = true;
+    this.lastTouchedSide = side;
+    this.consecutiveTouches = 1; // toss counts as first touch
+    this._fault = null;
   }
 
   /**
