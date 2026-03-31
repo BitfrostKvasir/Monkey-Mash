@@ -49,6 +49,7 @@ export class Player {
     this._iframes   = 0;
     this._spaceWas  = false;
     this._lmbWas    = false;
+    this._rootTimer = 0;
 
     this._dashJustStarted = false;
     this._dashJustEnded   = false;
@@ -87,6 +88,10 @@ export class Player {
     this.bananas++;
     if (this.onBananaCollect && worldPos) this.onBananaCollect(worldPos);
     return true;
+  }
+
+  root(duration) {
+    this._rootTimer = Math.max(this._rootTimer, duration);
   }
 
   attack(enemies) {
@@ -183,6 +188,7 @@ export class Player {
     if (this._dashCd     > 0) this._dashCd     -= dt;
     if (this._atkCd      > 0) this._atkCd      -= dt;
     if (this._iframes > 0) this._iframes -= dt;
+    if (this._rootTimer > 0) this._rootTimer -= dt;
 
     // Aim
     if (aimPoint) {
@@ -201,7 +207,7 @@ export class Player {
       if (inp.isDown('KeyA')) mx -= 1;
       if (inp.isDown('KeyD')) mx += 1;
       const len = Math.sqrt(mx*mx + mz*mz);
-      const spd = SPEED * this.stats.speedMult;
+      const spd = SPEED * this.stats.speedMult * (this._rootTimer > 0 ? 0.15 : 1);
       if (len > 0) {
         this.velocity.x = (mx/len) * spd;
         this.velocity.z = (mz/len) * spd;
@@ -233,8 +239,11 @@ export class Player {
 
     // Damage flash
     const flash = this._iframes > 0 && Math.floor(this._iframes * 10) % 2 === 0;
+    const rootFlash = this._rootTimer > 0 && Math.floor(this._rootTimer * 8) % 2 === 0;
     this.mesh.traverse(c => {
-      if (c.isMesh && c.material?.emissive) c.material.emissive.setHex(flash ? 0x440000 : 0x000000);
+      if (c.isMesh && c.material?.emissive) {
+        c.material.emissive.setHex(flash ? 0x440000 : rootFlash ? 0x004400 : 0x000000);
+      }
     });
 
     // Update arc — use a direct rotation matrix to avoid gimbal lock.

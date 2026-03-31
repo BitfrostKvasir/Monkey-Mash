@@ -1,5 +1,8 @@
 import * as THREE from 'three';
 import { GruntEnemy } from './enemy.js';
+import { BananaBandit } from './banana-bandit.js';
+import { CoconutBomber } from './coconut-bomber.js';
+import { VineStrangler } from './vine-strangler.js';
 
 export const ROOM_W = 22;
 export const ROOM_H = 18;
@@ -56,21 +59,33 @@ export class Room {
   }
 
   _spawnEnemies(roomNumber) {
-    const count = 3 + Math.floor(roomNumber * 1.5);
+    const count = 3 + Math.floor(roomNumber * 1.2);
     const hw = ROOM_W / 2 - 2;
     const hh = ROOM_H / 2 - 2;
 
+    // Build enemy type pool based on room number
+    const pool = ['grunt'];
+    if (roomNumber >= 3) pool.push('bandit');
+    if (roomNumber >= 3) pool.push('bandit'); // higher weight early
+    if (roomNumber >= 5) pool.push('bomber');
+    if (roomNumber >= 7) pool.push('strangler');
+
     for (let i = 0; i < count; i++) {
       let x, z;
-      // Keep enemies away from player spawn (center)
       do {
         x = (Math.random() * 2 - 1) * hw;
         z = (Math.random() * 2 - 1) * hh;
-      } while (Math.sqrt(x * x + z * z) < 4);
+      } while (Math.sqrt(x*x + z*z) < 4);
 
-      const enemy = new GruntEnemy(this.scene, x, z);
-      // Scale enemy HP with room number
-      enemy.hp    = Math.floor(enemy.hp * (1 + (roomNumber - 1) * 0.3));
+      const type = pool[Math.floor(Math.random() * pool.length)];
+      let enemy;
+      switch (type) {
+        case 'bandit':    enemy = new BananaBandit(this.scene, x, z);   break;
+        case 'bomber':    enemy = new CoconutBomber(this.scene, x, z);  break;
+        case 'strangler': enemy = new VineStrangler(this.scene, x, z);  break;
+        default:          enemy = new GruntEnemy(this.scene, x, z);     break;
+      }
+      enemy.hp    = Math.floor(enemy.hp * (1 + (roomNumber - 1) * 0.25));
       enemy.maxHp = enemy.hp;
       this.enemies.push(enemy);
     }
@@ -99,6 +114,7 @@ export class Room {
     }
     for (const enemy of this.enemies) {
       if (!enemy.isDead) enemy.die();
+      if (enemy.cleanup) enemy.cleanup();
     }
     this._meshes  = [];
     this.enemies  = [];
