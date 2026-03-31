@@ -53,9 +53,6 @@ export class Player {
     this._dashJustStarted = false;
     this._dashJustEnded   = false;
 
-    this._arcMesh  = null;
-    this._arcTimer = 0;
-
     this.onBananaCollect = null; // (worldPos: THREE.Vector3) => void
 
     const { group, rightArm, leftArm, rightLeg, leftLeg } = buildMonkeyMesh(color, hat);
@@ -67,6 +64,9 @@ export class Player {
 
     this.mesh.position.set(0, 0, 0);
     scene.add(this.mesh);
+
+    this._arcMesh = this._createArc();
+    scene.add(this._arcMesh);
   }
 
   get position() { return this.mesh.position; }
@@ -94,7 +94,6 @@ export class Player {
 
     const arcHalf = (ATK_ARC * this.stats.arcMult) / 2;
     const range   = ATK_RANGE * this.stats.rangeMult;
-    this._showArc(range, arcHalf * 2);
 
     const px = this.mesh.position.x;
     const pz = this.mesh.position.z;
@@ -182,14 +181,7 @@ export class Player {
     if (this._dashTimer  > 0) this._dashTimer  -= dt;
     if (this._dashCd     > 0) this._dashCd     -= dt;
     if (this._atkCd      > 0) this._atkCd      -= dt;
-    if (this._iframes    > 0) this._iframes    -= dt;
-    if (this._arcTimer   > 0) {
-      this._arcTimer -= dt;
-      if (this._arcTimer <= 0 && this._arcMesh) {
-        this.scene.remove(this._arcMesh);
-        this._arcMesh = null;
-      }
-    }
+    if (this._iframes > 0) this._iframes -= dt;
 
     // Aim
     if (aimPoint) {
@@ -244,25 +236,24 @@ export class Player {
       if (c.isMesh && c.material?.emissive) c.material.emissive.setHex(flash ? 0x440000 : 0x000000);
     });
 
+    // Update arc to always track player position and aim
+    if (this._arcMesh) {
+      this._arcMesh.position.copy(this.mesh.position);
+      this._arcMesh.position.y = 0.05;
+      this._arcMesh.rotation.y = Math.atan2(-this.aimDir.z, this.aimDir.x);
+    }
+
     this._animate(dt, now);
   }
 
   // ── Arc visual ───────────────────────────────────────────────────
 
-  _showArc(range, arcTotal) {
-    if (this._arcMesh) this.mesh.remove(this._arcMesh);
-    const geo = new THREE.RingGeometry(0.3, range, 16, 1, -arcTotal/2, arcTotal);
-    const mat = new THREE.MeshBasicMaterial({ color: 0xffff44, transparent: true, opacity: 0.45, side: THREE.DoubleSide });
-    this._arcMesh = new THREE.Mesh(geo, mat);
-    // Place in world space so parent mesh rotation doesn't affect orientation
-    this._arcMesh.position.copy(this.mesh.position);
-    this._arcMesh.position.y = 0.05;
-    // Lie flat: rotate XY ring into XZ ground plane
-    this._arcMesh.rotation.x = -Math.PI / 2;
-    // Face aim direction: ring angle-0 = world +X, so rotate Y to align with aimDir
-    this._arcMesh.rotation.y = Math.atan2(-this.aimDir.z, this.aimDir.x);
-    this.scene.add(this._arcMesh);
-    this._arcTimer = 0.12;
+  _createArc() {
+    const geo = new THREE.RingGeometry(0.3, ATK_RANGE, 24, 1, -ATK_ARC / 2, ATK_ARC);
+    const mat = new THREE.MeshBasicMaterial({ color: 0xffff44, transparent: true, opacity: 0.18, side: THREE.DoubleSide });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.rotation.x = -Math.PI / 2;
+    return mesh;
   }
 
   // ── Animation ────────────────────────────────────────────────────
