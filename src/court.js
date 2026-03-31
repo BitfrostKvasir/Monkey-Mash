@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
 export const COURT = {
-  width: 18,   // X axis (side to side)
+  width: 13,   // X axis (side to side)
   depth: 18,   // Z axis (front to back, split by net)
   netHeight: 2.43,
   netThickness: 0.05,

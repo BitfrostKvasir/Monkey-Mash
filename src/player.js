@@ -197,7 +197,7 @@ export class Player {
     const minZ = this.side === 1 ? 0.4 : -halfDepth;
     const maxZ = this.side === 1 ? halfDepth : -0.4;
     this.mesh.position.z = THREE.MathUtils.clamp(this.mesh.position.z, minZ, maxZ);
-    this.mesh.position.x = THREE.MathUtils.clamp(this.mesh.position.x, -8.5, 8.5);
+    this.mesh.position.x = THREE.MathUtils.clamp(this.mesh.position.x, -6, 6);
 
     if (this.isSpiking) {
       if (this.curveLeft) this.mesh.rotation.z = 0.4;
