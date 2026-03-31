@@ -4,7 +4,9 @@ import { COURT } from './court.js';
 const GRAVITY = -18;
 const BALL_RADIUS = 0.21;
 const AIR_DRAG = 0.995;
-const HIT_COOLDOWN = 0.35; // seconds before same player can hit again
+const HIT_COOLDOWN = 0.35;  // seconds before same player can hit again
+const PASS_RADIUS  = 1.4;   // generous reach for deliberate left-click pass
+const SPIKE_RADIUS = 0.7;   // tighter range for spike / auto-bump
 
 // Returns 'right' | 'left' — the LOSING side (side that committed fault / let ball land)
 // 'right' = player side (positive Z, side=1)   loses → opponent scores
@@ -126,8 +128,16 @@ export class Ball {
     if (player._hitCooldown > 0) return null;
 
     const dist = this.mesh.position.distanceTo(player.mesh.position);
-    const hitRadius = BALL_RADIUS + 0.5;
-    if (dist >= hitRadius) return null;
+
+    // Determine if this contact should register
+    const isPass  = player.wantsPass && dist < PASS_RADIUS + BALL_RADIUS;
+    const isSpike = player.isSpiking && player.isAirborne && dist < SPIKE_RADIUS + BALL_RADIUS;
+    const isAuto  = !player.isHuman && dist < SPIKE_RADIUS + BALL_RADIUS;
+
+    if (!isPass && !isSpike && !isAuto) return null;
+
+    // Consume the pass intent
+    if (player.wantsPass) player.wantsPass = false;
 
     // Update possession and touch count
     if (this.lastTouchedSide === player.side) {
@@ -144,8 +154,10 @@ export class Ball {
       return player.side;
     }
 
-    if (player.isSpiking && player.isAirborne) {
+    if (isSpike || (isAuto && player.isSpiking)) {
       this._applySpikeForce(player);
+    } else if (isPass) {
+      this._applyPassForce(player);
     } else {
       this._applyBumpForce(player);
     }
@@ -159,6 +171,15 @@ export class Ball {
     const dir = toNet.add(upward).normalize();
     const speed = 8 + Math.random() * 2;
     this.velocity.copy(dir.multiplyScalar(speed));
+  }
+
+  _applyPassForce(player) {
+    // Pop ball up and nudge it gently toward the net
+    this.velocity.set(
+      (Math.random() - 0.5) * 1.5,  // slight random left/right
+      9,                              // pop upward
+      -player.side * 2.5             // gentle push toward net
+    );
   }
 
   _applySpikeForce(player) {

@@ -29,6 +29,8 @@ export class Player {
     this.curveRight = false;
 
     this._jumpPressedLast = false;
+    this._mouseWasDown = false;
+    this.wantsPass = false;       // set for one frame on fresh left-click
     this._hitCooldown = 0; // managed by ball.js to prevent multi-frame contacts
 
     const bodyColor = color ?? (side === 1 ? 0xc8860a : 0x2266cc);
@@ -232,6 +234,11 @@ export class Player {
 
     this.curveLeft  = this.isSpiking && inp.isDown('KeyA');
     this.curveRight = this.isSpiking && inp.isDown('KeyD');
+
+    // Left click → pass (consumed by ball.js on contact)
+    const mouseDown = inp.isMouseDown(0);
+    this.wantsPass = mouseDown && !this._mouseWasDown;
+    this._mouseWasDown = mouseDown;
   }
 
   _handleAI(dt, ball) {
