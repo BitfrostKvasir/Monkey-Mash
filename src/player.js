@@ -6,16 +6,6 @@ const GRAVITY = -20;
 const GROUND_Y = 0;
 
 export class Player {
-  /**
-   * @param {THREE.Scene} scene
-   * @param {object} opts
-   * @param {number}  opts.side       1 = player side (positive Z), -1 = opponent side
-   * @param {boolean} opts.isHuman
-   * @param {object}  [opts.input]    InputManager (human only)
-   * @param {number}  [opts.color]    Body color hex (human player)
-   * @param {string}  [opts.hat]      Hat id: 'none' | 'tophat' | 'party' | 'cowboy' | 'crown'
-   * @param {object}  [opts.aiConfig] AI difficulty config
-   */
   constructor(scene, { side, isHuman, input, color, hat = 'none', aiConfig }) {
     this.side = side;
     this.isHuman = isHuman;
@@ -31,21 +21,29 @@ export class Player {
     this._jumpPressedLast = false;
     this._mouseWasDown = false;
     this.wantsPass = false;
-    this._camAzimuth = 0;       // set for one frame on fresh left-click
-    this._hitCooldown = 0; // managed by ball.js to prevent multi-frame contacts
+    this._passAnimTimer = 0;
+    this._camAzimuth = 0;
+    this._hitCooldown = 0;
+
+    // Animated limb groups (set in _buildMesh)
+    this._rightArm = null;
+    this._leftArm  = null;
+    this._rightLeg = null;
+    this._leftLeg  = null;
 
     const bodyColor = color ?? (side === 1 ? 0x7B3F00 : 0x2266cc);
     this.mesh = this._buildMesh(scene, side, bodyColor, hat);
   }
 
+  // ── Mesh construction ────────────────────────────────────────────
+
   _buildMesh(scene, side, bodyColor, hat) {
     const group = new THREE.Group();
-
-    const mat    = (c) => new THREE.MeshLambertMaterial({ color: c });
-    const body   = mat(bodyColor);
-    const cream  = mat(0xF5DEB3);
-    const white  = mat(0xF5F5F5);
-    const black  = mat(0x151515);
+    const mat   = (c) => new THREE.MeshLambertMaterial({ color: c });
+    const bodyM = mat(bodyColor);
+    const cream = mat(0xF5DEB3);
+    const white = mat(0xF5F5F5);
+    const black = mat(0x151515);
 
     const add = (geo, m, x = 0, y = 0, z = 0, sx = 1, sy = 1, sz = 1) => {
       const mesh = new THREE.Mesh(geo, m);
@@ -56,22 +54,20 @@ export class Player {
       return mesh;
     };
 
-    // ── Body (rounded barrel) ──
-    add(new THREE.SphereGeometry(0.36, 12, 10), body, 0, 0.56, 0, 1, 1.25, 0.95);
+    // Body
+    add(new THREE.SphereGeometry(0.36, 12, 10), bodyM, 0, 0.56, 0, 1, 1.25, 0.95);
 
-    // ── Head (large, round) ──
-    add(new THREE.SphereGeometry(0.44, 14, 12), body, 0, 1.32, 0);
+    // Head
+    add(new THREE.SphereGeometry(0.44, 14, 12), bodyM, 0, 1.32, 0);
 
-    // Face mask — white oval on front of head
+    // Face mask
     add(new THREE.SphereGeometry(0.34, 12, 10), white, 0, 1.28, 0.36, 0.88, 0.72, 0.28);
 
-    // Eyes — white sclera
+    // Eyes
     [-0.14, 0.14].forEach(x => {
       add(new THREE.SphereGeometry(0.115, 10, 8), white, x, 1.38, 0.48, 1, 1, 0.45);
-      // Pupil
-      add(new THREE.SphereGeometry(0.072, 8, 6), black, x, 1.38, 0.51);
-      // Shine dot
-      add(new THREE.SphereGeometry(0.026, 6, 4), white, x + 0.03, 1.41, 0.545);
+      add(new THREE.SphereGeometry(0.072, 8,  6), black, x, 1.38, 0.51);
+      add(new THREE.SphereGeometry(0.026, 6,  4), white, x + 0.03, 1.41, 0.545);
     });
 
     // Nose
@@ -79,31 +75,52 @@ export class Player {
 
     // Ears
     [-0.44, 0.44].forEach(x => {
-      add(new THREE.SphereGeometry(0.155, 8, 6), body, x, 1.36, 0);
-      // Inner ear
+      add(new THREE.SphereGeometry(0.155, 8, 6), bodyM, x, 1.36, 0);
       add(new THREE.SphereGeometry(0.085, 7, 5), cream, x, 1.36, 0.08);
     });
 
-    // ── Arms — horizontal T-pose ──
-    [-1, 1].forEach(dir => {
-      // Upper arm
-      const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.09, 0.55, 8), body);
-      arm.rotation.z = Math.PI / 2;
-      arm.position.set(dir * 0.65, 0.9, 0);
-      arm.castShadow = true;
-      group.add(arm);
-      // Hand (cream sphere)
-      add(new THREE.SphereGeometry(0.13, 8, 6), cream, dir * 0.98, 0.9, 0);
-    });
+    // ── Arm groups — pivot at shoulder ──
+    // rotating the group around Z lifts/lowers the whole arm+hand
+    // right arm (dir=1):  rotation.z = +π/2 → arm UP,  -π/2 → arm DOWN
+    // left  arm (dir=-1): rotation.z = -π/2 → arm UP,  +π/2 → arm DOWN
+    const makeArmGroup = (dir) => {
+      const g = new THREE.Group();
+      g.position.set(dir * 0.42, 0.85, 0);
+      const cyl = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.09, 0.55, 8), bodyM);
+      cyl.rotation.z = Math.PI / 2;
+      cyl.position.set(dir * 0.275, 0, 0);
+      cyl.castShadow = true;
+      g.add(cyl);
+      const hand = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 6), cream);
+      hand.position.set(dir * 0.55, 0, 0);
+      hand.castShadow = true;
+      g.add(hand);
+      group.add(g);
+      return g;
+    };
+    this._rightArm = makeArmGroup(1);
+    this._leftArm  = makeArmGroup(-1);
 
-    // ── Legs — short & stubby ──
-    [-0.17, 0.17].forEach(x => {
-      add(new THREE.CylinderGeometry(0.11, 0.1, 0.32, 8), body, x, 0.2, 0);
-      // Foot (black, slightly forward)
-      add(new THREE.SphereGeometry(0.13, 8, 6), black, x, 0.04, 0.07, 1, 0.75, 1.35);
-    });
+    // ── Leg groups — pivot at hip ──
+    // rotating around X swings leg forward (+) or backward (-)
+    const makeLegGroup = (dir) => {
+      const g = new THREE.Group();
+      g.position.set(dir * 0.17, 0.37, 0);
+      const cyl = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.1, 0.32, 8), bodyM);
+      cyl.position.set(0, -0.16, 0);
+      cyl.castShadow = true;
+      g.add(cyl);
+      const foot = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 6), black);
+      foot.scale.set(1, 0.75, 1.35);
+      foot.position.set(0, -0.32, 0.07);
+      foot.castShadow = true;
+      g.add(foot);
+      group.add(g);
+      return g;
+    };
+    this._rightLeg = makeLegGroup(1);
+    this._leftLeg  = makeLegGroup(-1);
 
-    // Hat
     this._addHat(group, hat);
 
     group.position.set(0, GROUND_Y, side * 4);
@@ -113,7 +130,6 @@ export class Player {
 
   _addHat(group, hat) {
     if (hat === 'none') return;
-
     const hatGroup = new THREE.Group();
     hatGroup.position.y = 1.82;
 
@@ -134,7 +150,6 @@ export class Player {
         new THREE.MeshLambertMaterial({ color: 0xff44cc }));
       cone.position.y = 0.3;
       hatGroup.add(cone);
-      // Polka dots
       [0, 1, 2, 3].forEach(i => {
         const dot = new THREE.Mesh(new THREE.SphereGeometry(0.045, 6, 6),
           new THREE.MeshLambertMaterial({ color: 0xffff00 }));
@@ -163,14 +178,12 @@ export class Player {
       const crownMat = new THREE.MeshLambertMaterial({ color: 0xffcc00 });
       const base = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.3, 0.2, 16), crownMat);
       hatGroup.add(base);
-      // Crown spikes
       [0, 1, 2, 3, 4].forEach(i => {
         const spike = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.25, 6), crownMat);
         const a = (i / 5) * Math.PI * 2;
         spike.position.set(Math.cos(a) * 0.24, 0.22, Math.sin(a) * 0.24);
         hatGroup.add(spike);
       });
-      // Gems
       const gemColors = [0xff2222, 0x2222ff, 0x22ff22];
       [0, 1, 2].forEach(i => {
         const gem = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 6),
@@ -184,14 +197,53 @@ export class Player {
     group.add(hatGroup);
   }
 
-  get position() {
-    return this.mesh.position;
+  // ── Animation ────────────────────────────────────────────────────
+
+  _animate(dt, now) {
+    const L = Math.min(1, 14 * dt); // lerp speed
+
+    const moving = !this.isAirborne &&
+      (Math.abs(this.velocity.x) > 0.3 || Math.abs(this.velocity.z) > 0.3);
+
+    let tRA = 0, tLA = 0; // target arm rotation.z (right, left)
+    let tRL = 0, tLL = 0; // target leg rotation.x (right, left)
+
+    if (this.isSpiking) {
+      // Right hand drives down, left hand stays up
+      tRA = -Math.PI / 2;
+      tLA = -Math.PI / 2;
+    } else if (this._passAnimTimer > 0) {
+      // Both hands up for pass
+      tRA =  Math.PI / 2;
+      tLA = -Math.PI / 2;
+      this._passAnimTimer -= dt;
+    } else if (this.isAirborne) {
+      // In air: both arms up
+      tRA =  Math.PI / 2;
+      tLA = -Math.PI / 2;
+    } else if (moving) {
+      // Walking: alternating arm swing + leg swing
+      const phase = now * 8;
+      tRA =  Math.sin(phase) * 0.5;
+      tLA = -Math.sin(phase) * 0.5;
+      tRL =  Math.sin(phase) * 0.55;
+      tLL = -Math.sin(phase) * 0.55;
+    }
+    // else idle: all targets stay 0 → T-pose
+
+    this._rightArm.rotation.z = THREE.MathUtils.lerp(this._rightArm.rotation.z, tRA, L);
+    this._leftArm.rotation.z  = THREE.MathUtils.lerp(this._leftArm.rotation.z,  tLA, L);
+    this._rightLeg.rotation.x = THREE.MathUtils.lerp(this._rightLeg.rotation.x, tRL, L);
+    this._leftLeg.rotation.x  = THREE.MathUtils.lerp(this._leftLeg.rotation.x,  tLL, L);
   }
+
+  // ── Main update ──────────────────────────────────────────────────
+
+  get position() { return this.mesh.position; }
 
   update(dt, now, ball, camAzimuth = 0) {
     if (this.isHuman) {
       this._handleHumanInput(dt, now, ball, camAzimuth);
-
     } else {
       this._handleAI(dt, ball);
     }
@@ -206,7 +258,6 @@ export class Player {
       this.mesh.position.y = GROUND_Y;
       this.velocity.y = 0;
       this.isAirborne = false;
-      this._doubleJumped = false;
     } else {
       this.isAirborne = true;
     }
@@ -217,15 +268,14 @@ export class Player {
     this.mesh.position.z = THREE.MathUtils.clamp(this.mesh.position.z, minZ, maxZ);
     this.mesh.position.x = THREE.MathUtils.clamp(this.mesh.position.x, -6, 6);
 
+    // Body tilt when curving spike
     if (this.isSpiking) {
-      if (this.curveLeft) this.mesh.rotation.z = 0.4;
-      else if (this.curveRight) this.mesh.rotation.z = -0.4;
-      else this.mesh.rotation.z = 0;
+      this.mesh.rotation.z = this.curveLeft ? 0.4 : this.curveRight ? -0.4 : 0;
     } else {
       this.mesh.rotation.z = THREE.MathUtils.lerp(this.mesh.rotation.z, 0, 10 * dt);
     }
 
-    // Shift-lock: face the direction the camera is pointing
+    // Shift-lock facing
     if (this.isHuman) {
       this.mesh.rotation.y = THREE.MathUtils.lerp(
         this.mesh.rotation.y,
@@ -233,18 +283,20 @@ export class Player {
         15 * dt
       );
     }
+
+    this._animate(dt, now);
   }
+
+  // ── Input ────────────────────────────────────────────────────────
 
   _handleHumanInput(dt, now, ball, camAzimuth) {
     this._camAzimuth = camAzimuth;
     const inp = this.input;
 
-    // Camera-relative movement vectors
-    // forward = direction camera faces projected on XZ plane
     const fwdX = -Math.sin(camAzimuth);
     const fwdZ = -Math.cos(camAzimuth);
     const rgtX =  Math.cos(camAzimuth);
-    const rgtZ = -Math.sin(camAzimuth);  // right = forward rotated -90° around Y
+    const rgtZ = -Math.sin(camAzimuth);
 
     let mx = 0, mz = 0;
     if (inp.isDown('KeyW')) { mx += fwdX; mz += fwdZ; }
@@ -266,35 +318,35 @@ export class Player {
       if (!this.isAirborne) {
         this.velocity.y = JUMP_FORCE;
       } else {
-        // Second space press in air → spike
         this.isSpiking = true;
       }
     }
-    // Clear spike once player lands
     if (!this.isAirborne) this.isSpiking = false;
     this._jumpPressedLast = jumpPressed;
 
     this.curveLeft  = this.isSpiking && inp.isDown('KeyA');
     this.curveRight = this.isSpiking && inp.isDown('KeyD');
 
-    // Left click → pass (consumed by ball.js on contact)
     const mouseDown = inp.isMouseDown(0);
-    this.wantsPass = mouseDown && !this._mouseWasDown;
+    if (mouseDown && !this._mouseWasDown) {
+      this.wantsPass = true;
+      this._passAnimTimer = 0.45; // play pass animation for 0.45 s
+    }
     this._mouseWasDown = mouseDown;
   }
 
   _handleAI(dt, ball) {
     if (!ball || !ball.inPlay) return;
 
-    const cfg = this.aiConfig;
+    const cfg  = this.aiConfig;
     const bpos = ball.mesh.position;
     const ppos = this.mesh.position;
 
     const targetX = THREE.MathUtils.clamp(bpos.x, -8, 8);
     const targetZ = THREE.MathUtils.clamp(bpos.z, -8.5, -0.4);
 
-    const dx = targetX - ppos.x;
-    const dz = targetZ - ppos.z;
+    const dx   = targetX - ppos.x;
+    const dz   = targetZ - ppos.z;
     const dist = Math.sqrt(dx * dx + dz * dz);
 
     if (dist > 0.2) {
@@ -309,8 +361,8 @@ export class Player {
       this.velocity.y = JUMP_FORCE;
     }
 
-    this.isSpiking = this.isAirborne && dist < 1.2 && Math.random() < cfg.spikeChance;
-    this.curveLeft = false;
+    this.isSpiking  = this.isAirborne && dist < 1.2 && Math.random() < cfg.spikeChance;
+    this.curveLeft  = false;
     this.curveRight = false;
   }
 }
