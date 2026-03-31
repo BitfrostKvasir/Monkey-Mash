@@ -1,10 +1,9 @@
 import * as THREE from 'three';
 
 const MOVE_SPEED = 6;
-const JUMP_FORCE = 9;
+const JUMP_FORCE = 13;
 const GRAVITY = -20;
 const GROUND_Y = 0;
-const DOUBLE_JUMP_WINDOW = 0.3;
 
 export class Player {
   /**
@@ -30,9 +29,6 @@ export class Player {
     this.curveRight = false;
 
     this._jumpPressedLast = false;
-    this._lastJumpTime = -999;
-    this._doubleJumped = false;
-    this._mouseWasDown = false;
     this._hitCooldown = 0; // managed by ball.js to prevent multi-frame contacts
 
     const bodyColor = color ?? (side === 1 ? 0xc8860a : 0x2266cc);
@@ -223,25 +219,19 @@ export class Player {
 
     const jumpPressed = inp.isDown('Space');
     if (jumpPressed && !this._jumpPressedLast) {
-      const timeSinceLast = now - this._lastJumpTime;
       if (!this.isAirborne) {
         this.velocity.y = JUMP_FORCE;
-        this._lastJumpTime = now;
-        this._doubleJumped = false;
-      } else if (!this._doubleJumped && timeSinceLast < DOUBLE_JUMP_WINDOW) {
-        this.velocity.y = JUMP_FORCE * 0.85;
-        this._doubleJumped = true;
-      } else if (!this._doubleJumped) {
-        this._lastJumpTime = now;
+      } else {
+        // Second space press in air → spike
+        this.isSpiking = true;
       }
     }
+    // Clear spike once player lands
+    if (!this.isAirborne) this.isSpiking = false;
     this._jumpPressedLast = jumpPressed;
 
-    const mouseDown = inp.isMouseDown(0);
-    this.isSpiking = mouseDown && this.isAirborne;
-    this.curveLeft = this.isSpiking && inp.isDown('KeyA');
+    this.curveLeft  = this.isSpiking && inp.isDown('KeyA');
     this.curveRight = this.isSpiking && inp.isDown('KeyD');
-    this._mouseWasDown = mouseDown;
   }
 
   _handleAI(dt, ball) {
