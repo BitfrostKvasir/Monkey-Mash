@@ -1,10 +1,8 @@
 export class Shop {
   constructor() {
-    this._overlay  = null;
-    this._timer    = 0;
-    this._timerEl  = null;
-    this._onClose  = null;
-    this._closed   = true;
+    this._overlay = null;
+    this._onClose = null;
+    this._closed  = true;
   }
 
   get isOpen() { return !this._closed; }
@@ -12,7 +10,6 @@ export class Shop {
   open(offers, playerBananas, onClose) {
     this._onClose = onClose;
     this._closed  = false;
-    this._timer   = 3.0;
 
     const costColor = c => c === 1 ? '#88ff44' : c === 2 ? '#ffcc00' : '#ff7755';
     const costLabel = c => c === 1 ? 'Common'  : c === 2 ? 'Uncommon' : 'Rare';
@@ -64,13 +61,11 @@ export class Shop {
         padding:9px 26px;
         border:1px solid rgba(255,255,255,0.22); border-radius:30px;
         cursor:pointer; background:transparent; color:rgba(255,255,255,0.45);
-      ">Skip <span id="shop-timer">3</span>s</button>
+      ">Skip</button>
     `;
 
     document.body.appendChild(overlay);
     this._overlay = overlay;
-    this._timerEl = overlay.querySelector('#shop-timer');
-
     overlay.querySelectorAll('.shop-card').forEach((card, i) => {
       const offer = offers[i];
       if (playerBananas < offer.cost) return;
@@ -88,12 +83,7 @@ export class Shop {
     overlay.querySelector('#shop-skip').addEventListener('click', () => this._close(null));
   }
 
-  update(dt) {
-    if (this._closed) return;
-    this._timer -= dt;
-    if (this._timerEl) this._timerEl.textContent = Math.max(0, Math.ceil(this._timer));
-    if (this._timer <= 0) this._close(null);
-  }
+  update(_dt) {}
 
   _close(upgrade) {
     if (this._closed) return;
