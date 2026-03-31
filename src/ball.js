@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { COURT } from './court.js';
 
-const GRAVITY = -18;
+const GRAVITY = -12;
 const BALL_RADIUS = 0.21;
 const AIR_DRAG = 0.995;
 const HIT_COOLDOWN = 0.35;  // seconds before same player can hit again
@@ -53,7 +53,7 @@ export class Ball {
       serverPosition.y + 1.8,
       serverPosition.z
     );
-    this.velocity.set((Math.random() - 0.5) * 0.5, 7, 0);
+    this.velocity.set((Math.random() - 0.5) * 0.5, 10, 0);
     this.inPlay = true;
     this.lastTouchedSide = side;
     this.consecutiveTouches = 1; // toss counts as first touch
@@ -169,23 +169,23 @@ export class Ball {
     const toNet = new THREE.Vector3(0, 0, -player.side);
     const upward = new THREE.Vector3(0, 1, 0);
     const dir = toNet.add(upward).normalize();
-    const speed = 8 + Math.random() * 2;
+    const speed = 14 + Math.random() * 3;
     this.velocity.copy(dir.multiplyScalar(speed));
   }
 
   _applyPassForce(player) {
     // Pop ball up and nudge it gently toward the net
     this.velocity.set(
-      (Math.random() - 0.5) * 1.5,  // slight random left/right
-      9,                              // pop upward
-      -player.side * 2.5             // gentle push toward net
+      (Math.random() - 0.5) * 2,
+      14,                            // pop upward
+      -player.side * 4               // push toward net
     );
   }
 
   _applySpikeForce(player) {
-    const baseZ = -player.side * (7 + Math.random() * 3);
-    const baseY = -6;
-    let baseX = (Math.random() - 0.5) * 4;
+    const baseZ = -player.side * (14 + Math.random() * 4);
+    const baseY = -8;
+    let baseX = (Math.random() - 0.5) * 5;
 
     if (player.curveLeft) baseX -= 4;
     if (player.curveRight) baseX += 4;
