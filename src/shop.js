@@ -11,8 +11,8 @@ export class Shop {
     this._onClose = onClose;
     this._closed  = false;
 
-    const costColor = c => c === 1 ? '#88ff44' : c === 2 ? '#ffcc00' : '#ff7755';
-    const costLabel = c => c === 1 ? 'Common'  : c === 2 ? 'Uncommon' : 'Rare';
+    const costColor = c => c <= 1 ? '#88ff44' : c === 2 ? '#ffcc00' : c === 3 ? '#ff7755' : '#cc44ff';
+    const costLabel = c => c <= 1 ? 'Common'  : c === 2 ? 'Uncommon' : c === 3 ? 'Rare' : 'Epic';
 
     const overlay = document.createElement('div');
     overlay.style.cssText = `
@@ -31,7 +31,7 @@ export class Shop {
         <div style="font-size:15px; color:#ffe135; margin-top:6px;">🍌 ${playerBananas} banana${playerBananas!==1?'s':''}</div>
       </div>
 
-      <div style="display:flex; gap:14px; margin-bottom:26px; user-select:none;" id="shop-cards">
+      <div style="display:flex; gap:14px; margin-bottom:26px; user-select:none; flex-wrap:wrap; justify-content:center; max-width:680px;" id="shop-cards">
         ${offers.map((u,i) => {
           const can = playerBananas >= u.cost;
           return `

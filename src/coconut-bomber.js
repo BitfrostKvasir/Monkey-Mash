@@ -1,4 +1,9 @@
 import * as THREE from 'three';
+import { spawnDmgNum } from './damage-numbers.js';
+
+function getTarget(player) {
+  return (player.activeDecoy && !player.activeDecoy.expired) ? player.activeDecoy : player;
+}
 
 const SPEED          = 1.8;
 const HP             = 65;
@@ -114,6 +119,9 @@ export class CoconutBomber {
     this._throwCd     = 2.0 + Math.random();
     this._windupTimer = 0;
     this._throwArmG   = null;
+    this._confuseTimer = 0;
+    this._confuseAngle = 0;
+    this._slowTimer    = 0;
 
     this.mesh = this._buildMesh();
     this.mesh.position.set(x, 0, z);
@@ -169,8 +177,9 @@ export class CoconutBomber {
     this._hpFg.scale.x = r; this._hpFg.position.x = -0.35*(1-r);
   }
 
-  takeDamage(amount, kbDir) {
+  takeDamage(amount, kbDir, meta = {}) {
     if (this.isDead) return;
+    spawnDmgNum(amount, this.mesh.position, meta.isCrit ?? false);
     this.hp -= amount; this._flashTimer = 0.12;
     if (kbDir) { this.velocity.x += kbDir.x*5; this.velocity.z += kbDir.z*5; }
     if (this.hp <= 0) this.die(); else this._updateHealthBar();
@@ -185,6 +194,15 @@ export class CoconutBomber {
   cleanup() {
     for (const p of this.projectiles) p.destroy();
     this.projectiles = [];
+  }
+
+  confuse(duration) {
+    this._confuseTimer = Math.max(this._confuseTimer, duration);
+    this._confuseAngle = Math.random() * Math.PI * 2;
+  }
+
+  slow(duration) {
+    this._slowTimer = Math.max(this._slowTimer, duration);
   }
 
   update(dt, player, allEnemies = []) {
@@ -207,6 +225,11 @@ export class CoconutBomber {
     // Knockback decay + separation
     this.velocity.x *= Math.pow(0.05, dt);
     this.velocity.z *= Math.pow(0.05, dt);
+
+    // Timers
+    if (this._confuseTimer > 0) this._confuseTimer -= dt;
+    if (this._slowTimer    > 0) this._slowTimer    -= dt;
+
     for (const o of allEnemies) {
       if (o === this || o.isDead) continue;
       const sx = this.mesh.position.x - o.mesh.position.x;
@@ -215,17 +238,37 @@ export class CoconutBomber {
       if (sd > 0 && sd < 1.2) { const p=(1.2-sd)/1.2*2.5; this.velocity.x+=sx/sd*p*dt; this.velocity.z+=sz/sd*p*dt; }
     }
 
-    const dx = player.position.x - this.mesh.position.x;
-    const dz = player.position.z - this.mesh.position.z;
-    const dist = Math.sqrt(dx*dx + dz*dz);
+    if (this._confuseTimer > 0) {
+      this.velocity.x += Math.cos(this._confuseAngle) * SPEED * dt * 3;
+      this.velocity.z += Math.sin(this._confuseAngle) * SPEED * dt * 3;
+      const spd = Math.sqrt(this.velocity.x**2 + this.velocity.z**2);
+      if (spd > SPEED) { this.velocity.x = this.velocity.x/spd*SPEED; this.velocity.z = this.velocity.z/spd*SPEED; }
+    } else {
+      const tgt  = getTarget(player);
+      const dx = tgt.position.x - this.mesh.position.x;
+      const dz = tgt.position.z - this.mesh.position.z;
+      const dist = Math.sqrt(dx*dx + dz*dz);
 
-    switch (this._state) {
-      case 'position': this._statePosition(dt, dist, dx, dz); break;
-      case 'windup':   this._stateWindup(dt, player, dx, dz); break;
+      switch (this._state) {
+        case 'position': this._statePosition(dt, dist, dx, dz);      break;
+        case 'windup':   this._stateWindup(dt, tgt, player, dx, dz); break;
+      }
+
+      if (this._slowTimer > 0) {
+        const maxSpd = SPEED * 0.5;
+        const spd = Math.sqrt(this.velocity.x**2 + this.velocity.z**2);
+        if (spd > maxSpd) { this.velocity.x = this.velocity.x/spd*maxSpd; this.velocity.z = this.velocity.z/spd*maxSpd; }
+      }
+
+      if (dist > 0.1) this.mesh.rotation.y = Math.atan2(dx, dz);
     }
 
     this.mesh.position.addScaledVector(this.velocity, dt);
-    if (dist > 0.1) this.mesh.rotation.y = Math.atan2(dx, dz);
+
+    if (this.mesh.position.x >  10.5) { this.mesh.position.x =  10.5; this.velocity.x = Math.min(0, this.velocity.x); }
+    if (this.mesh.position.x < -10.5) { this.mesh.position.x = -10.5; this.velocity.x = Math.max(0, this.velocity.x); }
+    if (this.mesh.position.z >   8.5) { this.mesh.position.z =   8.5; this.velocity.z = Math.min(0, this.velocity.z); }
+    if (this.mesh.position.z <  -8.5) { this.mesh.position.z =  -8.5; this.velocity.z = Math.max(0, this.velocity.z); }
   }
 
   _statePosition(dt, dist, dx, dz) {
@@ -248,7 +291,7 @@ export class CoconutBomber {
     }
   }
 
-  _stateWindup(dt, player, dx, dz) {
+  _stateWindup(dt, tgt, player, dx, dz) {
     this._windupTimer -= dt;
     // Slow down
     this.velocity.x *= Math.pow(0.1, dt);
@@ -262,9 +305,9 @@ export class CoconutBomber {
     this.mesh.traverse(c => { if (c.isMesh && c.material?.emissive) c.material.emissive.setHex(0x332200); });
 
     if (this._windupTimer <= 0) {
-      // Throw
+      // Throw toward tgt; explosion still checks actual player position
       const startPos = this.mesh.position.clone().add(new THREE.Vector3(0, 1.1, 0));
-      this.projectiles.push(new Coconut(this.scene, startPos, player.position.clone()));
+      this.projectiles.push(new Coconut(this.scene, startPos, tgt.position.clone()));
       // Reset arm + glow
       if (this._throwArmG) this._throwArmG.rotation.z = 0;
       this.mesh.traverse(c => { if (c.isMesh && c.material?.emissive) c.material.emissive.setHex(0x000000); });

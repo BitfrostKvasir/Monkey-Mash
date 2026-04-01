@@ -1,4 +1,9 @@
 import * as THREE from 'three';
+import { spawnDmgNum } from './damage-numbers.js';
+
+function getTarget(player) {
+  return (player.activeDecoy && !player.activeDecoy.expired) ? player.activeDecoy : player;
+}
 
 const GRUNT_SPEED  = 2.0;
 const GRUNT_DAMAGE = 10;
@@ -17,6 +22,9 @@ export class GruntEnemy {
     this._flashTimer = 0;
     this._droppedBanana = false;
     this.velocity = new THREE.Vector3();
+    this._confuseTimer = 0;
+    this._confuseAngle = 0;
+    this._slowTimer    = 0;
 
     this.mesh = this._buildMesh();
     this.mesh.position.set(x, 0, z);
@@ -90,8 +98,9 @@ export class GruntEnemy {
     this._hpFg.position.x = -0.35 * (1 - ratio);
   }
 
-  takeDamage(amount, knockbackDir) {
+  takeDamage(amount, knockbackDir, meta = {}) {
     if (this.isDead) return;
+    spawnDmgNum(amount, this.mesh.position, meta.isCrit ?? false);
     this.hp -= amount;
     this._flashTimer = 0.12;
 
@@ -107,6 +116,15 @@ export class GruntEnemy {
   die() {
     this.isDead = true;
     this.scene.remove(this.mesh);
+  }
+
+  confuse(duration) {
+    this._confuseTimer = Math.max(this._confuseTimer, duration);
+    this._confuseAngle = Math.random() * Math.PI * 2;
+  }
+
+  slow(duration) {
+    this._slowTimer = Math.max(this._slowTimer, duration);
   }
 
   update(dt, player, allEnemies = []) {
@@ -126,7 +144,11 @@ export class GruntEnemy {
     this.velocity.x *= Math.pow(0.05, dt);
     this.velocity.z *= Math.pow(0.05, dt);
 
-    // Separation — push away from nearby enemies so they don't stack
+    // Timers
+    if (this._confuseTimer > 0) this._confuseTimer -= dt;
+    if (this._slowTimer    > 0) this._slowTimer    -= dt;
+
+    // Separation
     for (const other of allEnemies) {
       if (other === this || other.isDead) continue;
       const sx = this.mesh.position.x - other.mesh.position.x;
@@ -139,31 +161,43 @@ export class GruntEnemy {
       }
     }
 
-    // Move toward player
-    const dx = player.position.x - this.mesh.position.x;
-    const dz = player.position.z - this.mesh.position.z;
-    const dist = Math.sqrt(dx * dx + dz * dz);
+    // Always track real distance to target for contact damage
+    const tgt = getTarget(player);
+    const realDx = tgt.position.x - this.mesh.position.x;
+    const realDz = tgt.position.z - this.mesh.position.z;
+    const realDist = Math.sqrt(realDx * realDx + realDz * realDz);
 
+    // Movement direction — confused enemies wander randomly
+    const confused = this._confuseTimer > 0;
+    const dx   = confused ? Math.cos(this._confuseAngle) : realDx;
+    const dz   = confused ? Math.sin(this._confuseAngle) : realDz;
+    const dist = confused ? 1 : realDist;
+
+    const speedMult = this._slowTimer > 0 ? 0.5 : 1;
     if (dist > 0.4) {
-      const s = GRUNT_SPEED / dist;
+      const s = GRUNT_SPEED * speedMult / dist;
       this.velocity.x += dx * s;
       this.velocity.z += dz * s;
-      // Cap speed
       const spd = Math.sqrt(this.velocity.x ** 2 + this.velocity.z ** 2);
-      if (spd > GRUNT_SPEED * 2.5) {
-        this.velocity.x = (this.velocity.x / spd) * GRUNT_SPEED * 2.5;
-        this.velocity.z = (this.velocity.z / spd) * GRUNT_SPEED * 2.5;
+      const maxSpd = GRUNT_SPEED * speedMult * 2.5;
+      if (spd > maxSpd) {
+        this.velocity.x = (this.velocity.x / spd) * maxSpd;
+        this.velocity.z = (this.velocity.z / spd) * maxSpd;
       }
     }
 
     this.mesh.position.addScaledVector(this.velocity, dt);
 
-    // Face player
+    if (this.mesh.position.x >  10.5) { this.mesh.position.x =  10.5; this.velocity.x = Math.min(0, this.velocity.x); }
+    if (this.mesh.position.x < -10.5) { this.mesh.position.x = -10.5; this.velocity.x = Math.max(0, this.velocity.x); }
+    if (this.mesh.position.z >   8.5) { this.mesh.position.z =   8.5; this.velocity.z = Math.min(0, this.velocity.z); }
+    if (this.mesh.position.z <  -8.5) { this.mesh.position.z =  -8.5; this.velocity.z = Math.max(0, this.velocity.z); }
+
     this.mesh.rotation.y = Math.atan2(dx, dz);
 
-    // Contact damage
-    if (dist < 0.8 && this._contactCd <= 0) {
-      player.takeDamage(GRUNT_DAMAGE);
+    // Contact damage (always uses real distance)
+    if (realDist < 0.8 && this._contactCd <= 0) {
+      tgt.takeDamage(GRUNT_DAMAGE);
       this._contactCd = CONTACT_CD;
     }
   }

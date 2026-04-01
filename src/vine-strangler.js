@@ -1,11 +1,16 @@
 import * as THREE from 'three';
+import { spawnDmgNum } from './damage-numbers.js';
+
+function getTarget(player) {
+  return (player.activeDecoy && !player.activeDecoy.expired) ? player.activeDecoy : player;
+}
 
 const SPEED      = 1.5;
-const HP         = 80;
+const HP         = 60;
 const MID_RANGE  = 4.5;
-const VINE_RANGE = 8.0;
-const ROOT_DUR   = 1.8;
-const VINE_LIFE  = 3.0;
+const VINE_RANGE = 6.0;
+const ROOT_DUR   = 0.9;
+const VINE_LIFE  = 2.0;
 const VINE_W     = 0.22;
 
 // ── Vine trap ────────────────────────────────────────────────────
@@ -94,6 +99,9 @@ export class VineStrangler {
     this._state       = 'approach';
     this._stateTimer  = 0;
     this._shootCd     = 1.0;
+    this._confuseTimer = 0;
+    this._confuseAngle = 0;
+    this._slowTimer    = 0;
 
     // Wind-up ground glow
     this._glowMesh = null;
@@ -153,8 +161,9 @@ export class VineStrangler {
     this._hpFg.scale.x = r; this._hpFg.position.x = -0.35*(1-r);
   }
 
-  takeDamage(amount, kbDir) {
+  takeDamage(amount, kbDir, meta = {}) {
     if (this.isDead) return;
+    spawnDmgNum(amount, this.mesh.position, meta.isCrit ?? false);
     this.hp -= amount; this._flashTimer = 0.12;
     if (kbDir) { this.velocity.x += kbDir.x*4; this.velocity.z += kbDir.z*4; }
     if (this.hp <= 0) this.die(); else this._updateHealthBar();
@@ -171,6 +180,15 @@ export class VineStrangler {
     for (const t of this.traps) t.destroy();
     this.traps = [];
     this._removeGlow();
+  }
+
+  confuse(duration) {
+    this._confuseTimer = Math.max(this._confuseTimer, duration);
+    this._confuseAngle = Math.random() * Math.PI * 2;
+  }
+
+  slow(duration) {
+    this._slowTimer = Math.max(this._slowTimer, duration);
   }
 
   _removeGlow() {
@@ -198,6 +216,11 @@ export class VineStrangler {
     // Knockback decay + separation
     this.velocity.x *= Math.pow(0.05, dt);
     this.velocity.z *= Math.pow(0.05, dt);
+
+    // Timers
+    if (this._confuseTimer > 0) this._confuseTimer -= dt;
+    if (this._slowTimer    > 0) this._slowTimer    -= dt;
+
     for (const o of allEnemies) {
       if (o===this || o.isDead) continue;
       const sx=this.mesh.position.x-o.mesh.position.x, sz=this.mesh.position.z-o.mesh.position.z;
@@ -205,18 +228,38 @@ export class VineStrangler {
       if (sd>0 && sd<1.2) { const p=(1.2-sd)/1.2*2; this.velocity.x+=sx/sd*p*dt; this.velocity.z+=sz/sd*p*dt; }
     }
 
-    const dx = player.position.x - this.mesh.position.x;
-    const dz = player.position.z - this.mesh.position.z;
-    const dist = Math.sqrt(dx*dx + dz*dz);
+    if (this._confuseTimer > 0) {
+      this.velocity.x += Math.cos(this._confuseAngle) * SPEED * dt * 3;
+      this.velocity.z += Math.sin(this._confuseAngle) * SPEED * dt * 3;
+      const spd = Math.sqrt(this.velocity.x**2 + this.velocity.z**2);
+      if (spd > SPEED) { this.velocity.x = this.velocity.x/spd*SPEED; this.velocity.z = this.velocity.z/spd*SPEED; }
+    } else {
+      const tgt  = getTarget(player);
+      const dx = tgt.position.x - this.mesh.position.x;
+      const dz = tgt.position.z - this.mesh.position.z;
+      const dist = Math.sqrt(dx*dx + dz*dz);
 
-    switch (this._state) {
-      case 'approach': this._stateApproach(dt, dist, dx, dz); break;
-      case 'windup':   this._stateWindup(dt, player, dist, dx, dz); break;
-      case 'reset':    this._stateReset(dt); break;
+      switch (this._state) {
+        case 'approach': this._stateApproach(dt, dist, dx, dz);            break;
+        case 'windup':   this._stateWindup(dt, tgt, player, dist, dx, dz); break;
+        case 'reset':    this._stateReset(dt);                              break;
+      }
+
+      if (this._slowTimer > 0) {
+        const maxSpd = SPEED * 0.5;
+        const spd = Math.sqrt(this.velocity.x**2 + this.velocity.z**2);
+        if (spd > maxSpd) { this.velocity.x = this.velocity.x/spd*maxSpd; this.velocity.z = this.velocity.z/spd*maxSpd; }
+      }
+
+      if (dist > 0.1) this.mesh.rotation.y = Math.atan2(dx, dz);
     }
 
     this.mesh.position.addScaledVector(this.velocity, dt);
-    if (dist > 0.1) this.mesh.rotation.y = Math.atan2(dx, dz);
+
+    if (this.mesh.position.x >  10.5) { this.mesh.position.x =  10.5; this.velocity.x = Math.min(0, this.velocity.x); }
+    if (this.mesh.position.x < -10.5) { this.mesh.position.x = -10.5; this.velocity.x = Math.max(0, this.velocity.x); }
+    if (this.mesh.position.z >   8.5) { this.mesh.position.z =   8.5; this.velocity.z = Math.min(0, this.velocity.z); }
+    if (this.mesh.position.z <  -8.5) { this.mesh.position.z =  -8.5; this.velocity.z = Math.max(0, this.velocity.z); }
   }
 
   _stateApproach(dt, dist, dx, dz) {
@@ -246,7 +289,7 @@ export class VineStrangler {
     this.scene.add(this._glowMesh);
   }
 
-  _stateWindup(dt, player, dist, dx, dz) {
+  _stateWindup(dt, tgt, player, dist, dx, dz) {
     this.velocity.x *= Math.pow(0.05, dt);
     this.velocity.z *= Math.pow(0.05, dt);
 
@@ -262,7 +305,7 @@ export class VineStrangler {
       this.traps.push(new VineTrap(this.scene, this.mesh.position.clone(), dir, len));
       this.mesh.traverse(c => { if (c.isMesh && c.material?.emissive) c.material.emissive.setHex(0x000000); });
       this._removeGlow();
-      this._shootCd = 3.5 + Math.random();
+      this._shootCd = 5.0 + Math.random() * 1.5;
       this._state = 'reset'; this._stateTimer = 1.2;
     }
   }

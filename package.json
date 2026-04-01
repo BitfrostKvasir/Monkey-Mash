@@ -2,14 +2,19 @@
   "name": "monkey-mash",
   "version": "0.1.0",
   "description": "A 3D volleyball game featuring playable monkey characters",
+  "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "start": "node server.js",
+    "deploy": "vite build && pm2 start ecosystem.config.cjs --update-env"
   },
   "dependencies": {
-    "three": "^0.163.0",
-    "@dimforge/rapier3d-compat": "^0.12.0"
+    "@dimforge/rapier3d-compat": "^0.12.0",
+    "express": "^5.2.1",
+    "express-session": "^1.19.0",
+    "three": "^0.163.0"
   },
   "devDependencies": {
     "vite": "^5.2.0"

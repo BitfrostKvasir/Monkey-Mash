@@ -1,0 +1,5 @@
+# Caddy automatically gets + renews HTTPS certificates from Let's Encrypt
+
+monkeymasher.io {
+    reverse_proxy localhost:3000
+}

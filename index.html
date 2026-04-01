@@ -4,6 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Monkey Mash</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
       body { background: #000; overflow: hidden; }
@@ -47,14 +50,230 @@
         transition: width 0.1s;
       }
 
-      /* Banana count — top right */
-      #banana-count {
+      /* Top-right HUD cluster */
+      #top-right-hud {
         position: absolute;
         top: 16px; right: 16px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      /* Banana count */
+      #banana-count {
         font-size: 22px;
         color: #ffe135;
         text-shadow: 0 2px 8px rgba(0,0,0,0.8);
         letter-spacing: 1px;
+      }
+
+      /* Pause button */
+      #btn-pause {
+        pointer-events: all;
+        font-size: 16px;
+        width: 32px; height: 32px;
+        border: 1px solid rgba(255,255,255,0.25);
+        border-radius: 8px;
+        background: rgba(0,0,0,0.45);
+        color: rgba(255,255,255,0.7);
+        cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        transition: background 0.15s, border-color 0.15s;
+        line-height: 1;
+        padding: 0;
+        font-family: sans-serif;
+      }
+      #btn-pause:hover {
+        background: rgba(255,255,255,0.15);
+        border-color: rgba(255,255,255,0.5);
+        color: #fff;
+      }
+
+      /* Pause overlay */
+      #pause-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.75);
+        z-index: 150;
+        align-items: center;
+        justify-content: center;
+        font-family: 'Arial Black', sans-serif;
+      }
+      #pause-overlay.visible {
+        display: flex;
+      }
+      #pause-panel {
+        background: rgba(10,20,10,0.95);
+        border: 1px solid rgba(255,255,255,0.12);
+        border-radius: 16px;
+        padding: 32px 36px;
+        min-width: 340px;
+        max-width: 520px;
+        width: 90%;
+        max-height: 85vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0;
+      }
+      #pause-title {
+        font-size: 28px;
+        letter-spacing: 6px;
+        text-transform: uppercase;
+        color: #fff;
+        margin-bottom: 6px;
+      }
+      #pause-subtitle {
+        font-size: 11px;
+        letter-spacing: 3px;
+        text-transform: uppercase;
+        color: rgba(255,255,255,0.35);
+        font-family: Arial, sans-serif;
+        font-weight: normal;
+        margin-bottom: 24px;
+      }
+      #upgrade-list-header {
+        width: 100%;
+        font-size: 10px;
+        letter-spacing: 3px;
+        text-transform: uppercase;
+        color: rgba(255,255,255,0.35);
+        font-family: Arial, sans-serif;
+        font-weight: normal;
+        margin-bottom: 10px;
+      }
+      #upgrade-list {
+        width: 100%;
+        overflow-y: auto;
+        max-height: 340px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-bottom: 24px;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255,255,255,0.15) transparent;
+      }
+      .pause-upgrade-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: rgba(255,255,255,0.05);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 8px;
+        padding: 8px 12px;
+        font-family: Arial, sans-serif;
+        font-weight: normal;
+      }
+      .pause-upgrade-icon {
+        font-size: 20px;
+        flex-shrink: 0;
+        width: 24px;
+        text-align: center;
+      }
+      .pause-upgrade-info {
+        flex: 1;
+        min-width: 0;
+      }
+      .pause-upgrade-name {
+        font-size: 13px;
+        color: rgba(255,255,255,0.9);
+        font-family: 'Arial Black', sans-serif;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .pause-upgrade-desc {
+        font-size: 10px;
+        color: rgba(255,255,255,0.4);
+        margin-top: 2px;
+        line-height: 1.3;
+      }
+      .pause-upgrade-count {
+        font-size: 11px;
+        font-family: 'Arial Black', sans-serif;
+        color: #ffe135;
+        background: rgba(255,225,53,0.12);
+        border: 1px solid rgba(255,225,53,0.25);
+        border-radius: 12px;
+        padding: 2px 8px;
+        white-space: nowrap;
+        flex-shrink: 0;
+      }
+      .pause-empty {
+        font-family: Arial, sans-serif;
+        font-weight: normal;
+        font-size: 13px;
+        color: rgba(255,255,255,0.3);
+        text-align: center;
+        padding: 20px 0;
+        width: 100%;
+      }
+      #pause-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        align-items: center;
+      }
+      #pause-top-row {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+      }
+      #btn-bestiary {
+        font-family: 'Arial Black', sans-serif;
+        font-size: 13px;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        padding: 11px 22px;
+        border: 1px solid rgba(255,255,255,0.2);
+        border-radius: 30px;
+        cursor: pointer;
+        background: rgba(255,255,255,0.06);
+        color: rgba(255,255,255,0.7);
+        transition: transform 0.1s, background 0.15s, color 0.15s;
+      }
+      #btn-bestiary:hover {
+        background: rgba(255,255,255,0.14);
+        color: #fff;
+        transform: scale(1.04);
+      }
+      #btn-resume {
+        font-family: 'Arial Black', sans-serif;
+        font-size: 14px;
+        letter-spacing: 3px;
+        text-transform: uppercase;
+        padding: 11px 36px;
+        border: none;
+        border-radius: 30px;
+        cursor: pointer;
+        background: linear-gradient(135deg, #44cc22, #22aa44);
+        color: #fff;
+        box-shadow: 0 4px 20px rgba(68,200,34,0.4);
+        transition: transform 0.1s, box-shadow 0.1s;
+      }
+      #btn-resume:hover {
+        transform: scale(1.06);
+        box-shadow: 0 6px 28px rgba(68,200,34,0.7);
+      }
+      #btn-exit-to-menu {
+        font-family: 'Arial Black', sans-serif;
+        font-size: 12px;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        padding: 9px 28px;
+        border: 1px solid rgba(255,80,80,0.4);
+        border-radius: 30px;
+        cursor: pointer;
+        background: transparent;
+        color: rgba(255,120,120,0.7);
+        transition: transform 0.1s, border-color 0.15s, color 0.15s, background 0.15s;
+      }
+      #btn-exit-to-menu:hover {
+        border-color: #ff5555;
+        color: #ff8888;
+        background: rgba(255,60,60,0.1);
+        transform: scale(1.04);
       }
 
       /* Room number — top center */
@@ -68,6 +287,18 @@
         text-transform: uppercase;
         color: rgba(255,255,255,0.5);
         text-shadow: 0 2px 6px rgba(0,0,0,0.8);
+      }
+      #score-hud {
+        position: absolute;
+        top: 34px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 10px;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        color: rgba(255,225,53,0.5);
+        text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+        white-space: nowrap;
       }
 
       /* Room cleared message — center */
@@ -113,14 +344,155 @@
         text-transform: uppercase;
         font-family: Arial, sans-serif;
         font-weight: normal;
-        margin-bottom: 48px;
+        margin-bottom: 18px;
+      }
+
+      /* Game over score panel */
+      #go-score-panel {
+        display: flex;
+        align-items: center;
+        gap: 28px;
+        margin-bottom: 20px;
+      }
+      .go-score-col { text-align: center; }
+      .go-score-num {
+        font-size: 38px;
+        letter-spacing: -1px;
+        color: #fff;
+        line-height: 1;
+      }
+      .go-score-num.is-best { color: #ffe135; }
+      .go-score-lbl {
+        font-size: 9px;
+        letter-spacing: 3px;
+        text-transform: uppercase;
+        color: rgba(255,255,255,0.35);
+        font-family: Arial, sans-serif;
+        font-weight: normal;
+        margin-top: 4px;
+      }
+      .go-score-diff {
+        font-size: 8px;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        font-family: Arial, sans-serif;
+        font-weight: bold;
+        margin-top: 3px;
+        min-height: 12px;
+      }
+      .go-score-divider {
+        width: 1px; height: 44px;
+        background: rgba(255,255,255,0.12);
+        flex-shrink: 0;
+      }
+      #go-new-record {
+        font-size: 11px;
+        letter-spacing: 3px;
+        text-transform: uppercase;
+        color: #ffe135;
+        text-shadow: 0 0 14px rgba(255,225,53,0.65);
+        margin-bottom: 14px;
+        display: none;
+      }
+
+      /* Game over customizer */
+      #go-customizer {
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 24px;
+        width: 100%;
+        max-width: 420px;
+        max-height: 50vh;
+        overflow-y: auto;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255,255,255,0.15) transparent;
+        padding: 0 8px;
+        border-top: 1px solid rgba(255,255,255,0.1);
+        padding-top: 20px;
+        margin-top: 4px;
+      }
+      #go-customizer.open { display: flex; }
+      .go-section-label {
+        font-size: 10px;
+        letter-spacing: 3px;
+        text-transform: uppercase;
+        color: rgba(255,255,255,0.35);
+        font-family: Arial, sans-serif;
+        font-weight: normal;
+        margin-bottom: -8px;
+        align-self: flex-start;
+      }
+      .go-row {
+        display: flex;
+        gap: 8px;
+        justify-content: center;
+        flex-wrap: wrap;
+        width: 100%;
+      }
+      .go-class-card {
+        cursor: pointer;
+        border: 2px solid rgba(255,255,255,0.15);
+        border-radius: 10px;
+        padding: 8px 12px;
+        background: rgba(255,255,255,0.04);
+        text-align: center;
+        transition: all 0.15s;
+        min-width: 72px;
+        font-family: 'Arial Black', sans-serif;
+      }
+      .go-class-card.selected {
+        border-color: #ff7744;
+        background: rgba(255,119,68,0.14);
+      }
+      .go-class-card:hover { transform: scale(1.06); }
+      .go-class-icon { font-size: 22px; margin-bottom: 3px; }
+      .go-class-name { font-size: 10px; letter-spacing: 1px; color: rgba(255,255,255,0.8); }
+      .go-color-swatch {
+        width: 30px; height: 30px; border-radius: 50%;
+        cursor: pointer;
+        border: 3px solid transparent;
+        transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+      }
+      .go-color-swatch.selected {
+        border-color: #fff;
+        box-shadow: 0 0 10px rgba(255,255,255,0.7);
+      }
+      .go-color-swatch:hover { transform: scale(1.2); }
+      .go-hat-card {
+        cursor: pointer;
+        border: 2px solid rgba(255,255,255,0.15);
+        border-radius: 10px;
+        padding: 7px 10px;
+        background: rgba(255,255,255,0.04);
+        text-align: center;
+        transition: all 0.15s;
+        min-width: 58px;
+        font-family: Arial, sans-serif;
+        font-weight: normal;
+      }
+      .go-hat-card.selected {
+        border-color: #ff7744;
+        background: rgba(255,119,68,0.14);
+      }
+      .go-hat-card:hover { transform: scale(1.06); }
+      .go-hat-icon { font-size: 20px; margin-bottom: 2px; }
+      .go-hat-name { font-size: 9px; color: rgba(255,255,255,0.6); letter-spacing: 1px; }
+      #go-btn-row {
+        display: flex;
+        gap: 14px;
+        align-items: center;
+        flex-wrap: wrap;
+        justify-content: center;
+        margin-bottom: 20px;
       }
       #btn-try-again {
         font-family: 'Arial Black', sans-serif;
         font-size: 18px;
         letter-spacing: 3px;
         text-transform: uppercase;
-        padding: 14px 48px;
+        padding: 14px 40px;
         border: none;
         border-radius: 50px;
         cursor: pointer;
@@ -133,6 +505,414 @@
         transform: scale(1.07);
         box-shadow: 0 8px 36px rgba(255,60,0,0.8);
       }
+      #btn-change-kit {
+        font-family: 'Arial Black', sans-serif;
+        font-size: 14px;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        padding: 14px 28px;
+        border: 2px solid rgba(255,255,255,0.3);
+        border-radius: 50px;
+        cursor: pointer;
+        background: transparent;
+        color: rgba(255,255,255,0.75);
+        transition: transform 0.1s, border-color 0.1s, color 0.1s;
+      }
+      #btn-change-kit:hover {
+        transform: scale(1.05);
+        border-color: #fff;
+        color: #fff;
+      }
+      #btn-go-exit {
+        font-family: 'Arial Black', sans-serif;
+        font-size: 11px;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        padding: 9px 28px;
+        border: 1px solid rgba(255,80,80,0.35);
+        border-radius: 30px;
+        cursor: pointer;
+        background: transparent;
+        color: rgba(255,120,120,0.65);
+        transition: border-color 0.12s, color 0.12s, background 0.12s, transform 0.12s;
+        margin-top: -4px;
+      }
+      #btn-go-exit:hover {
+        border-color: #ff5555;
+        color: #ff9090;
+        background: rgba(255,60,60,0.1);
+        transform: scale(1.04);
+      }
+      #btn-confirm-kit {
+        font-family: 'Arial Black', sans-serif;
+        font-size: 14px;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        padding: 12px 32px;
+        border: none;
+        border-radius: 50px;
+        cursor: pointer;
+        background: linear-gradient(135deg, #44cc22, #22aa44);
+        color: #fff;
+        box-shadow: 0 4px 18px rgba(68,200,34,0.5);
+        transition: transform 0.1s, box-shadow 0.1s;
+        margin-top: 4px;
+      }
+      #btn-confirm-kit:hover {
+        transform: scale(1.05);
+        box-shadow: 0 6px 28px rgba(68,200,34,0.8);
+      }
+
+      /* Bottom-left HUD column (epic + special stacked) */
+      #bottom-left-hud {
+        position: absolute;
+        bottom: 20px; left: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        align-items: flex-start;
+      }
+
+      /* Epic ability indicator */
+      #epic-indicator {
+        width: 130px;
+        background: rgba(0,0,0,0.55);
+        border: 1px solid rgba(200,68,255,0.3);
+        border-radius: 10px;
+        padding: 9px 12px 10px;
+        transition: border-color 0.2s, box-shadow 0.2s;
+      }
+      #epic-indicator.ready {
+        border-color: rgba(200,100,255,0.65);
+        box-shadow: 0 0 12px rgba(180,60,255,0.3);
+      }
+      #epic-indicator.active {
+        border-color: rgba(220,140,255,0.8);
+        box-shadow: 0 0 14px rgba(200,80,255,0.45);
+      }
+      #epic-key-label {
+        font-size: 9px;
+        letter-spacing: 2px;
+        color: rgba(200,100,255,0.55);
+        text-transform: uppercase;
+        margin-bottom: 6px;
+      }
+      #epic-body {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+      #epic-icon {
+        font-size: 22px;
+        line-height: 1;
+        flex-shrink: 0;
+      }
+      #epic-name {
+        font-size: 10px;
+        color: rgba(220,160,255,0.82);
+        font-family: Arial, sans-serif;
+        font-weight: normal;
+        letter-spacing: 0.5px;
+        line-height: 1.3;
+      }
+      #epic-cd-track {
+        height: 5px;
+        background: rgba(255,255,255,0.1);
+        border-radius: 3px;
+        overflow: hidden;
+      }
+      #epic-cd-fill {
+        height: 100%;
+        width: 100%;
+        border-radius: 3px;
+        transition: width 0.08s linear, background 0.3s;
+      }
+      #epic-ready-label {
+        margin-top: 5px;
+        font-size: 9px;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        color: rgba(200,120,255,0.9);
+        text-align: center;
+        opacity: 0;
+        transition: opacity 0.2s;
+      }
+      #epic-indicator.ready #epic-ready-label { opacity: 1; }
+
+      /* Special ability indicator */
+      #special-indicator {
+        width: 130px;
+        background: rgba(0,0,0,0.55);
+        border: 1px solid rgba(255,255,255,0.15);
+        border-radius: 10px;
+        padding: 9px 12px 10px;
+        transition: border-color 0.2s, box-shadow 0.2s;
+      }
+      #special-indicator.ready {
+        border-color: rgba(100,255,120,0.55);
+        box-shadow: 0 0 12px rgba(100,255,100,0.25);
+      }
+      #special-indicator.active {
+        border-color: rgba(255,180,50,0.7);
+        box-shadow: 0 0 14px rgba(255,160,30,0.35);
+      }
+      #special-key-label {
+        font-size: 9px;
+        letter-spacing: 2px;
+        color: rgba(255,255,255,0.38);
+        text-transform: uppercase;
+        margin-bottom: 6px;
+      }
+      #special-body {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+      #special-icon {
+        font-size: 22px;
+        line-height: 1;
+        flex-shrink: 0;
+      }
+      #special-name {
+        font-size: 10px;
+        color: rgba(255,255,255,0.72);
+        font-family: Arial, sans-serif;
+        font-weight: normal;
+        letter-spacing: 0.5px;
+        line-height: 1.3;
+      }
+      #special-cd-track {
+        height: 5px;
+        background: rgba(255,255,255,0.1);
+        border-radius: 3px;
+        overflow: hidden;
+      }
+      #special-cd-fill {
+        height: 100%;
+        width: 100%;
+        border-radius: 3px;
+        transition: width 0.08s linear, background 0.3s;
+      }
+      #special-ready-label {
+        margin-top: 5px;
+        font-size: 9px;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        color: rgba(100,255,120,0.8);
+        text-align: center;
+        opacity: 0;
+        transition: opacity 0.2s;
+      }
+      #special-indicator.ready #special-ready-label { opacity: 1; }
+
+      /* Floating damage numbers */
+      #dmg-layer {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        overflow: hidden;
+        z-index: 20;
+      }
+      .dmg-num {
+        position: absolute;
+        font-family: 'Arial Black', Impact, sans-serif;
+        font-size: 17px;
+        font-weight: 900;
+        line-height: 1;
+        color: var(--dmg-color, #ffffff);
+        text-shadow: 0 1px 0 rgba(0,0,0,0.9), 0 0 6px rgba(0,0,0,0.7);
+        white-space: nowrap;
+        will-change: transform, opacity;
+        letter-spacing: -0.5px;
+      }
+      .dmg-num.dmg-crit {
+        font-size: 24px;
+        color: #fff;
+        text-shadow: 0 0 10px var(--dmg-color, #ff6600), 0 1px 0 rgba(0,0,0,0.9);
+      }
+
+      /* Heal indicator — top left, below HP bar */
+      #heal-msg {
+        position: absolute;
+        top: 46px; left: 16px;
+        font-size: 13px;
+        letter-spacing: 1px;
+        color: #66ff88;
+        text-shadow: 0 0 10px rgba(80,255,100,0.7), 0 2px 4px rgba(0,0,0,0.8);
+        opacity: 0;
+        transition: opacity 0.15s;
+        pointer-events: none;
+        white-space: nowrap;
+      }
+      #heal-msg.visible { opacity: 1; }
+
+      /* Boss HP bar — bottom center */
+      #boss-hud {
+        display: none;
+        position: absolute;
+        bottom: 28px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 340px;
+        text-align: center;
+      }
+      #boss-name {
+        font-size: 13px;
+        letter-spacing: 3px;
+        text-transform: uppercase;
+        color: rgba(255,200,50,0.9);
+        text-shadow: 0 2px 8px rgba(200,100,0,0.7);
+        margin-bottom: 5px;
+      }
+      #boss-hp-track {
+        width: 100%;
+        height: 16px;
+        background: rgba(0,0,0,0.6);
+        border-radius: 8px;
+        border: 1px solid rgba(255,180,0,0.35);
+        overflow: hidden;
+      }
+      #boss-hp-fill {
+        height: 100%;
+        width: 100%;
+        background: linear-gradient(90deg, #cc4400, #ff8800);
+        border-radius: 8px;
+        transition: width 0.12s, background 0.4s;
+      }
+
+      /* Dev build badge */
+      #dev-badge {
+        display: none;
+        position: absolute;
+        top: 48px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 9px;
+        letter-spacing: 3px;
+        text-transform: uppercase;
+        color: #ff4444;
+        text-shadow: 0 0 8px rgba(255,60,60,0.6);
+        pointer-events: none;
+        white-space: nowrap;
+        animation: devPulse 2s ease-in-out infinite;
+      }
+      @keyframes devPulse {
+        0%, 100% { opacity: 0.6; }
+        50%       { opacity: 1.0; }
+      }
+
+      /* Dev shop overlay */
+      #dev-shop-overlay {
+        position: fixed; inset: 0; z-index: 170;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(0,0,0,0.6);
+        font-family: 'Arial Black', sans-serif;
+      }
+      #dev-shop-panel {
+        background: rgba(5,10,20,0.97);
+        border: 1px solid rgba(255,60,60,0.3);
+        border-radius: 16px;
+        width: min(580px, 94vw);
+        max-height: 84vh;
+        display: flex; flex-direction: column;
+        overflow: hidden;
+      }
+      #dev-shop-header {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 16px 20px 12px;
+        border-bottom: 1px solid rgba(255,60,60,0.18);
+        flex-shrink: 0;
+      }
+      #dev-shop-title {
+        font-size: 16px; letter-spacing: 3px; text-transform: uppercase; color: #ff6655;
+      }
+      #dev-shop-close {
+        font-family: 'Arial Black', sans-serif;
+        font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+        padding: 6px 16px; border: 1px solid rgba(255,100,80,0.35); border-radius: 16px;
+        background: transparent; color: rgba(255,150,130,0.7); cursor: pointer;
+        transition: background .15s, color .15s;
+      }
+      #dev-shop-close:hover { background: rgba(255,80,60,0.15); color: #ff8877; }
+      #dev-shop-hint {
+        font-family: Arial, sans-serif; font-weight: normal;
+        font-size: 10px; letter-spacing: 1px;
+        color: rgba(255,255,255,0.28);
+        padding: 7px 20px 8px;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+        flex-shrink: 0;
+      }
+      #dev-shop-body {
+        overflow-y: auto; padding: 4px 10px 14px;
+        display: flex; flex-direction: column; gap: 0;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255,80,60,0.2) transparent;
+      }
+      #dev-shop-list {
+        display: flex; flex-direction: column; gap: 3px;
+      }
+      .dev-row {
+        display: flex; align-items: center; gap: 10px;
+        padding: 8px 10px; border-radius: 8px;
+        background: rgba(255,255,255,0.02);
+        border: 1px solid transparent;
+        transition: background .12s;
+      }
+      .dev-row:hover { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.07); }
+      .dev-row-icon { font-size: 20px; flex-shrink: 0; width: 26px; text-align: center; }
+      .dev-row-info { flex: 1; min-width: 0; }
+      .dev-row-top {
+        display: flex; align-items: baseline; gap: 7px; margin-bottom: 2px;
+      }
+      .dev-row-name {
+        font-size: 12px; color: rgba(255,255,255,0.88);
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      }
+      .dev-row-tier { font-size: 8px; letter-spacing: 2px; text-transform: uppercase; flex-shrink: 0; }
+      .dev-row-class {
+        font-size: 8px; letter-spacing: 1px; text-transform: uppercase;
+        color: rgba(255,255,255,0.25); flex-shrink: 0;
+      }
+      .dev-row-desc {
+        font-family: Arial, sans-serif; font-weight: normal;
+        font-size: 10px; color: rgba(255,255,255,0.38); line-height: 1.35;
+      }
+      .dev-buy-btn {
+        font-family: 'Arial Black', sans-serif;
+        font-size: 9px; letter-spacing: 1px; text-transform: uppercase;
+        padding: 5px 12px; border: 1px solid rgba(255,255,255,0.2); border-radius: 12px;
+        background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.6);
+        cursor: pointer; flex-shrink: 0;
+        transition: background .12s, color .12s, border-color .12s;
+      }
+      .dev-buy-btn:hover { background: rgba(255,255,255,0.12); color: #fff; border-color: rgba(255,255,255,0.45); }
+      .dev-buy-btn.dev-buy-confirm {
+        background: rgba(68,200,34,0.25); color: #88ff44; border-color: #44cc22;
+      }
+      .dev-section-label {
+        font-size: 9px; letter-spacing: 3px; text-transform: uppercase;
+        color: rgba(255,255,255,0.3); font-family: Arial, sans-serif;
+        font-weight: normal; padding: 4px 0 6px;
+      }
+      .dev-row-owned { border-color: rgba(255,100,100,0.15); }
+      .dev-row-count {
+        font-size: 11px; color: #ffcc00; font-weight: bold;
+        background: rgba(255,200,0,0.12); padding: 1px 6px;
+        border-radius: 8px; flex-shrink: 0;
+      }
+      .dev-remove-btn {
+        flex-shrink: 0; padding: 5px 11px;
+        border: 1px solid rgba(255,80,80,0.4); border-radius: 6px;
+        background: transparent; color: rgba(255,120,120,0.8);
+        font-family: 'Arial Black', sans-serif; font-size: 10px;
+        letter-spacing: 1px; cursor: pointer;
+        transition: background 0.1s, color 0.1s, border-color 0.1s;
+      }
+      .dev-remove-btn:hover {
+        background: rgba(255,60,60,0.18); color: #ff8888; border-color: #ff5555;
+      }
     </style>
   </head>
   <body>
@@ -143,16 +923,106 @@
         <div id="hp-label">HP</div>
         <div id="hp-track"><div id="hp-fill"></div></div>
       </div>
-      <div id="banana-count">🍌 0</div>
+      <div id="heal-msg"></div>
+      <div id="top-right-hud">
+        <button id="btn-pause">⏸</button>
+        <div id="banana-count">🍌 0</div>
+      </div>
       <div id="room-num">Room 1</div>
+      <div id="score-hud"></div>
+      <div id="dev-badge">⚠ DEV BUILD</div>
       <div id="room-clear">Room Cleared!</div>
+
+      <!-- Bottom-left ability stack -->
+      <div id="bottom-left-hud">
+        <!-- Epic ability indicator (hidden until purchased) -->
+        <div id="epic-indicator" style="display:none;">
+          <div id="epic-key-label">Right Click — Epic</div>
+          <div id="epic-body">
+            <div id="epic-icon">✨</div>
+            <div id="epic-name">Epic</div>
+          </div>
+          <div id="epic-cd-track">
+            <div id="epic-cd-fill"></div>
+          </div>
+          <div id="epic-ready-label">Ready</div>
+        </div>
+
+        <!-- Special ability indicator -->
+        <div id="special-indicator">
+          <div id="special-key-label">Shift — Special</div>
+          <div id="special-body">
+            <div id="special-icon">⚡</div>
+            <div id="special-name">Special</div>
+          </div>
+          <div id="special-cd-track">
+            <div id="special-cd-fill"></div>
+          </div>
+          <div id="special-ready-label">Ready</div>
+        </div>
+      </div>
+
+      <!-- Boss HP bar -->
+      <div id="boss-hud">
+        <div id="boss-name">Boss</div>
+        <div id="boss-hp-track"><div id="boss-hp-fill"></div></div>
+      </div>
+    </div>
+
+    <!-- Floating damage numbers -->
+    <div id="dmg-layer"></div>
+
+    <!-- Pause Menu -->
+    <div id="pause-overlay">
+      <div id="pause-panel">
+        <div id="pause-title">Paused</div>
+        <div id="pause-subtitle">Press Esc or P to resume</div>
+        <div id="upgrade-list-header">Upgrades Collected</div>
+        <div id="upgrade-list">
+          <div class="pause-empty">No upgrades yet</div>
+        </div>
+        <div id="pause-actions">
+          <div id="pause-top-row">
+            <button id="btn-bestiary">📖 Bestiary</button>
+            <button id="btn-resume">Resume</button>
+          </div>
+          <button id="btn-exit-to-menu">✕ Exit to Menu</button>
+        </div>
+      </div>
     </div>
 
     <!-- Game Over -->
     <div id="gameover-overlay">
       <div id="gameover-title">Game Over</div>
       <div id="gameover-sub">The jungle got you</div>
-      <button id="btn-try-again">Try Again</button>
+      <div id="go-new-record">🏆 New Record!</div>
+      <div id="go-score-panel">
+        <div class="go-score-col">
+          <div class="go-score-num" id="go-score-val">0</div>
+          <div class="go-score-lbl">Rooms Cleared</div>
+          <div class="go-score-diff" id="go-score-diff"></div>
+        </div>
+        <div class="go-score-divider"></div>
+        <div class="go-score-col">
+          <div class="go-score-num is-best" id="go-best-val">0</div>
+          <div class="go-score-lbl">Personal Best</div>
+          <div class="go-score-diff" id="go-best-diff"></div>
+        </div>
+      </div>
+      <div id="go-btn-row">
+        <button id="btn-try-again">Try Again</button>
+        <button id="btn-change-kit">Change Kit</button>
+      </div>
+      <button id="btn-go-exit">✕ Exit to Menu</button>
+      <div id="go-customizer">
+        <div class="go-section-label">Class</div>
+        <div class="go-row" id="go-class-row"></div>
+        <div class="go-section-label">Color</div>
+        <div class="go-row" id="go-color-row"></div>
+        <div class="go-section-label">Hat</div>
+        <div class="go-row" id="go-hat-row"></div>
+        <button id="btn-confirm-kit">✓ Confirm Kit</button>
+      </div>
     </div>
 
     <script type="module" src="/src/main.js"></script>

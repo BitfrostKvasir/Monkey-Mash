@@ -1,5 +1,7 @@
 import * as THREE from 'three';
-import { Player }      from './player.js';
+import { BrawlerPlayer }   from './brawler.js';
+import { SlingerPlayer }   from './slinger.js';
+import { TricksterPlayer } from './trickster.js';
 import { Room }        from './room.js';
 import { BananaDrop }  from './pickup.js';
 import { Shop }        from './shop.js';
@@ -21,13 +23,38 @@ export class Game {
 
     this.onRoomClear = null;
     this.onGameOver  = null;
+    this.onHeal      = null;
+
+    this.isPaused = false;
+    this._purchasedUpgrades = [];
 
     const { color = 0x7B3F00, hat = 'none' } = config;
+    this._playerClass = config.playerClass || 'brawler';
+    const diffMults = { easy: 0.65, normal: 1.0, hard: 1.45 };
+    this._enemyHpMult = diffMults[config.difficulty] ?? 1.0;
 
-    this.player  = new Player(scene, input, color, hat);
-    this.room    = new Room(scene, this._roomNumber);
+    const cls = { brawler: BrawlerPlayer, slinger: SlingerPlayer, trickster: TricksterPlayer }[this._playerClass] || BrawlerPlayer;
+    this.player  = new cls(scene, input, color, hat);
+    this.room    = new Room(scene, this._roomNumber, { enemyHpMult: this._enemyHpMult });
     this.pickups = [];
     this._shop   = new Shop();
+
+    // Forward player heal events to game-level callback
+    this.player.onHeal = (amount) => { if (this.onHeal) this.onHeal(amount); };
+
+    // Wire decoy burst callback (Trickster upgrade)
+    this.player.onDecoyExpire = (pos) => {
+      if (!this.player.stats.tricksterDecoyBurst) return;
+      for (const e of this.room.enemies) {
+        if (e.isDead) continue;
+        const dx = e.mesh.position.x - pos.x;
+        const dz = e.mesh.position.z - pos.z;
+        if (dx*dx + dz*dz < 9) {
+          const d = Math.sqrt(dx*dx + dz*dz) || 1;
+          e.takeDamage(25, new THREE.Vector3(dx/d, 0, dz/d));
+        }
+      }
+    };
 
     // Wire banana explosion callback
     this.player.onBananaCollect = (pos) => {
@@ -48,13 +75,43 @@ export class Game {
     this._raycaster   = new THREE.Raycaster();
     this._aimTarget   = new THREE.Vector3();
 
-    this._lmbWas = false;
+    this._lmbWas   = false;
+    this._shiftWas = false;
+    this._rmbWas   = false;
   }
 
   // ── Main update ──────────────────────────────────────────────────
 
+  pause()  { this.isPaused = true; }
+  resume() { this.isPaused = false; }
+
+  removeUpgrade(upgradeId) {
+    const idx = this._purchasedUpgrades.findLastIndex(u => u.id === upgradeId);
+    if (idx === -1) return false;
+    this._purchasedUpgrades.splice(idx, 1);
+    this.player.resetStats();
+    for (const u of this._purchasedUpgrades) u.apply(this.player);
+    // Clamp hp to new max
+    this.player.hp = Math.min(this.player.hp, this.player.maxHp);
+    return true;
+  }
+
+  getPurchasedUpgrades() {
+    // Return array of { id, label, icon, desc, count } grouped by id
+    const map = new Map();
+    for (const u of this._purchasedUpgrades) {
+      if (map.has(u.id)) {
+        map.get(u.id).count++;
+      } else {
+        map.set(u.id, { id: u.id, label: u.label, icon: u.icon, desc: u.desc, count: 1 });
+      }
+    }
+    return [...map.values()];
+  }
+
   update(dt, now, camera, mouseNDC) {
     if (this.isOver) return;
+    if (this.isPaused) return;
 
     // Aim raycast
     if (mouseNDC && camera) {
@@ -103,13 +160,35 @@ export class Game {
   }
 
   _updateFight(dt) {
-    // Attack input
+    // Attack input — hold to auto-fire at the attack cooldown rate
     const lmb = this.input.isMouseDown(0);
-    if (lmb && !this._lmbWas) this.player.attack(this.room.enemies);
+    if (lmb) {
+      const fired = this.player.attack(this.room.enemies);
+      if (fired) {
+        if (this.player._epic?.onPlayerAttack) this.player._epic.onPlayerAttack(this.room.enemies);
+        if (this.player._epic?.cloneAttack)    this.player._epic.cloneAttack(this.room.enemies, this._aimTarget);
+      }
+    }
     this._lmbWas = lmb;
+
+    const shift = this.input.isDown('ShiftLeft') || this.input.isDown('ShiftRight');
+    if (shift && !this._shiftWas) this.player.useSpecial(this.room.enemies);
+    this._shiftWas = shift;
+
+    // Epic ability — right click
+    const rmb = this.input.isMouseDown(2);
+    if (rmb && !this._rmbWas) this.player.activateEpic(this.room.enemies, this._aimTarget);
+    this._rmbWas = rmb;
+
+    // Update active epic ability
+    if (this.player._epic) this.player._epic.update(dt, this.room.enemies);
 
     this.room.update(dt, this.player);
     this.room.clampPlayer(this.player);
+
+    if (this.player.updateProjectiles) {
+      this.player.updateProjectiles(dt, this.room.enemies);
+    }
 
     // Spawn drops when enemies die
     for (const e of this.room.enemies) {
@@ -174,6 +253,7 @@ export class Game {
   }
 
   _calcReward() {
+    if (this.room.isBossRoom) return 8 + Math.floor(Math.random() * 3); // 8-10 bananas
     // Rooms 1-2: 1-2 bananas. Rooms 3-4: 2-3. Room 5+: 3-4.
     const base  = 1 + Math.min(Math.floor((this._roomNumber - 1) / 2), 2);
     const bonus = Math.random() < 0.4 ? 1 : 0;
@@ -182,11 +262,14 @@ export class Game {
 
   _openShop() {
     this._phase = 'shop';
-    const offers = generateOffers(this.player.bananas, this._roomNumber);
+    // Boss rooms guarantee a class-specific rare upgrade in slot 3
+    const purchasedIds = this._purchasedUpgrades.map(u => u.id);
+    const offers = generateOffers(this.player.bananas, this._roomNumber, this._playerClass, this.room.isBossRoom, !!this.player._epic, purchasedIds);
     this._shop.open(offers, this.player.bananas, (upgrade) => {
       if (upgrade) {
         this.player.bananas -= upgrade.cost;
         upgrade.apply(this.player);
+        this._purchasedUpgrades.push(upgrade);
       }
       this._phase      = 'transition';
       this._transTimer = 0.4;
@@ -197,13 +280,57 @@ export class Game {
     for (const p of this.pickups) p.destroy();
     this.pickups = [];
 
+    // Heal between rooms — 15% after boss, 7% after every 2nd room
+    if (this.room.isBossRoom) {
+      this.player.heal(this.player.maxHp * 0.15);
+    } else if (this._roomNumber % 2 === 0) {
+      this.player.heal(this.player.maxHp * 0.07);
+    }
+
+    if (this.player.cleanup) this.player.cleanup();
     this.room.destroy();
     this._roomNumber++;
-    this.room = new Room(this.scene, this._roomNumber);
+    this.room = new Room(this.scene, this._roomNumber, { enemyHpMult: this._enemyHpMult });
 
     this.player.mesh.position.set(0, 0, 0);
     this.player.velocity.set(0, 0, 0);
   }
 
-  getRoomNumber() { return this._roomNumber; }
+  getRoomNumber()  { return this._roomNumber; }
+  getPlayerClass() { return this._playerClass; }
+  getScore()       { return Math.max(0, this._roomNumber - 1); }
+
+  // ── Dev mode helpers ─────────────────────────────────────────────
+
+  _devCloseShop() {
+    if (this._shop._overlay) {
+      this._shop._overlay.remove();
+      this._shop._overlay = null;
+    }
+    this._shop._closed = true;
+  }
+
+  devSkipForward() {
+    if (this.isOver) return;
+    this._devCloseShop();
+    for (const p of this.pickups) p.destroy();
+    this.pickups = [];
+    if (this.player.cleanup) this.player.cleanup();
+    this._nextRoom();
+    this._phase = 'fight';
+  }
+
+  devSkipBack() {
+    if (this.isOver || this._roomNumber <= 1) return;
+    this._devCloseShop();
+    for (const p of this.pickups) p.destroy();
+    this.pickups = [];
+    if (this.player.cleanup) this.player.cleanup();
+    this.room.destroy();
+    this._roomNumber = Math.max(1, this._roomNumber - 1);
+    this.room = new Room(this.scene, this._roomNumber, { enemyHpMult: this._enemyHpMult });
+    this.player.mesh.position.set(0, 0, 0);
+    this.player.velocity.set(0, 0, 0);
+    this._phase = 'fight';
+  }
 }

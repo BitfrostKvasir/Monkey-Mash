@@ -1,4 +1,9 @@
 import * as THREE from 'three';
+import { spawnDmgNum } from './damage-numbers.js';
+
+function getTarget(player) {
+  return (player.activeDecoy && !player.activeDecoy.expired) ? player.activeDecoy : player;
+}
 
 const SPEED        = 4.5;
 const HP           = 50;
@@ -30,6 +35,9 @@ export class BananaBandit {
     this._circleAngle = Math.random() * Math.PI * 2;
     this._circleDir   = Math.random() > 0.5 ? 1 : -1;
     this._dashDir     = new THREE.Vector3();
+    this._confuseTimer = 0;
+    this._confuseAngle = 0;
+    this._slowTimer    = 0;
 
     this.mesh = this._buildMesh();
     this.mesh.position.set(x, 0, z);
@@ -82,8 +90,9 @@ export class BananaBandit {
     this._hpFg.scale.x = r; this._hpFg.position.x = -0.3 * (1 - r);
   }
 
-  takeDamage(amount, kbDir) {
+  takeDamage(amount, kbDir, meta = {}) {
     if (this.isDead) return;
+    spawnDmgNum(amount, this.mesh.position, meta.isCrit ?? false);
     this.hp -= amount; this._flashTimer = 0.12;
     if (kbDir) { this.velocity.x += kbDir.x * 6; this.velocity.z += kbDir.z * 6; }
     if (this.hp <= 0) this.die(); else this._updateHealthBar();
@@ -91,6 +100,15 @@ export class BananaBandit {
 
   die()     { this.isDead = true; this.scene.remove(this.mesh); }
   cleanup() {}
+
+  confuse(duration) {
+    this._confuseTimer = Math.max(this._confuseTimer, duration);
+    this._confuseAngle = Math.random() * Math.PI * 2;
+  }
+
+  slow(duration) {
+    this._slowTimer = Math.max(this._slowTimer, duration);
+  }
 
   update(dt, player, allEnemies = []) {
     if (this.isDead) return;
@@ -111,6 +129,10 @@ export class BananaBandit {
     this.velocity.x *= Math.pow(0.05, dt);
     this.velocity.z *= Math.pow(0.05, dt);
 
+    // Timers
+    if (this._confuseTimer > 0) this._confuseTimer -= dt;
+    if (this._slowTimer    > 0) this._slowTimer    -= dt;
+
     // Separation
     for (const o of allEnemies) {
       if (o === this || o.isDead) continue;
@@ -124,27 +146,48 @@ export class BananaBandit {
       }
     }
 
-    const dx   = player.position.x - this.mesh.position.x;
-    const dz   = player.position.z - this.mesh.position.z;
-    const dist = Math.sqrt(dx*dx + dz*dz);
+    if (this._confuseTimer > 0) {
+      // Wander in random direction
+      this.velocity.x += Math.cos(this._confuseAngle) * SPEED * dt * 3;
+      this.velocity.z += Math.sin(this._confuseAngle) * SPEED * dt * 3;
+      const spd = Math.sqrt(this.velocity.x**2 + this.velocity.z**2);
+      if (spd > SPEED) { this.velocity.x = this.velocity.x/spd*SPEED; this.velocity.z = this.velocity.z/spd*SPEED; }
+    } else {
+      const tgt  = getTarget(player);
+      const dx   = tgt.position.x - this.mesh.position.x;
+      const dz   = tgt.position.z - this.mesh.position.z;
+      const dist = Math.sqrt(dx*dx + dz*dz);
 
-    switch (this._state) {
-      case 'circle':  this._stateCircle(dt, player, dist, dx, dz); break;
-      case 'windup':  this._stateWindup(dt, player, dx, dz);       break;
-      case 'dash':    this._stateDash(dt, player, dist);            break;
-      case 'swipe':   this._stateSwipe(dt, player, dist, dx, dz);  break;
-      case 'retreat': this._stateRetreat(dt, dist, dx, dz);        break;
+      switch (this._state) {
+        case 'circle':  this._stateCircle(dt, tgt, dist, dx, dz);     break;
+        case 'windup':  this._stateWindup(dt, tgt, dx, dz);           break;
+        case 'dash':    this._stateDash(dt, tgt, player, dist);       break;
+        case 'swipe':   this._stateSwipe(dt, tgt, dist, dx, dz);     break;
+        case 'retreat': this._stateRetreat(dt, dist, dx, dz);        break;
+      }
+
+      if (this._slowTimer > 0) {
+        const maxSpd = SPEED * 0.5;
+        const spd = Math.sqrt(this.velocity.x**2 + this.velocity.z**2);
+        if (spd > maxSpd) { this.velocity.x = this.velocity.x/spd*maxSpd; this.velocity.z = this.velocity.z/spd*maxSpd; }
+      }
+
+      if (dist > 0.1) this.mesh.rotation.y = Math.atan2(dx, dz);
     }
 
     this.mesh.position.addScaledVector(this.velocity, dt);
-    if (dist > 0.1) this.mesh.rotation.y = Math.atan2(dx, dz);
+
+    if (this.mesh.position.x >  10.5) { this.mesh.position.x =  10.5; this.velocity.x = Math.min(0, this.velocity.x); }
+    if (this.mesh.position.x < -10.5) { this.mesh.position.x = -10.5; this.velocity.x = Math.max(0, this.velocity.x); }
+    if (this.mesh.position.z >   8.5) { this.mesh.position.z =   8.5; this.velocity.z = Math.min(0, this.velocity.z); }
+    if (this.mesh.position.z <  -8.5) { this.mesh.position.z =  -8.5; this.velocity.z = Math.max(0, this.velocity.z); }
   }
 
-  _stateCircle(dt, player, dist, dx, dz) {
+  _stateCircle(dt, tgt, dist, dx, dz) {
     this._circleAngle += this._circleDir * dt * 1.8;
     const r  = CIRCLE_R + Math.sin(this._circleAngle * 2.5) * 0.6;
-    const tx = player.position.x + Math.cos(this._circleAngle) * r;
-    const tz = player.position.z + Math.sin(this._circleAngle) * r;
+    const tx = tgt.position.x + Math.cos(this._circleAngle) * r;
+    const tz = tgt.position.z + Math.sin(this._circleAngle) * r;
     const ex = tx - this.mesh.position.x, ez = tz - this.mesh.position.z;
     const ed = Math.sqrt(ex*ex + ez*ez);
     if (ed > 0.1) {
@@ -164,7 +207,7 @@ export class BananaBandit {
     }
   }
 
-  _stateWindup(dt, player, dx, dz) {
+  _stateWindup(dt, tgt, dx, dz) {
     this.velocity.x *= 0.85; this.velocity.z *= 0.85;
     // Shake + crouch
     this.mesh.position.x += Math.sin(Date.now() * 0.04) * 0.025;
@@ -183,17 +226,17 @@ export class BananaBandit {
     }
   }
 
-  _stateDash(dt, player, dist) {
+  _stateDash(dt, tgt, player, dist) {
     if (dist < 1.0 && this._contactCd <= 0) {
-      player.takeDamage(DASH_DMG);
-      if (player.bananas > 0) player.bananas = Math.max(0, player.bananas - 1);
+      tgt.takeDamage(DASH_DMG);
+      if (tgt === player && player.bananas > 0) player.bananas = Math.max(0, player.bananas - 1);
       this._contactCd = CONTACT_CD;
       this._state = 'retreat'; this._stateTimer = 0.8; return;
     }
     if (this._stateTimer <= 0) { this._state = 'retreat'; this._stateTimer = 0.8; }
   }
 
-  _stateSwipe(dt, player, dist, dx, dz) {
+  _stateSwipe(dt, tgt, dist, dx, dz) {
     this._swipeTimer -= dt;
     if (dist > 0.1) {
       this.velocity.x += dx/dist * 2.5 * dt;
@@ -201,7 +244,7 @@ export class BananaBandit {
     }
     if (this._swipeTimer <= 0) {
       if (this._swipeHits < 2) {
-        if (dist < SWIPE_RANGE && this._contactCd <= 0) { player.takeDamage(SWIPE_DMG); this._contactCd = 0.2; }
+        if (dist < SWIPE_RANGE && this._contactCd <= 0) { tgt.takeDamage(SWIPE_DMG); this._contactCd = 0.2; }
         this._swipeHits++; this._swipeTimer = 0.28;
       } else {
         this._state = 'retreat'; this._stateTimer = 0.7;
