@@ -158,6 +158,8 @@ export class ServerPlayer {
       comboStep:   this.comboStep,
       aimAngle:    this.aimAngle,
       reviveProgress: this.reviveProgress,
+      specialCdRatio: this.playerClass === 'brawler' ? (this.rageCd > 0 ? this.rageCd / 10.0 : 0) : 0,
+      specialActive:  this.rageActive,
     };
   }
 }

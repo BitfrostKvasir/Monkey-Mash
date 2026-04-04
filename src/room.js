@@ -327,3 +327,23 @@ export class Room {
     this.enemies  = [];
   }
 }
+
+/**
+ * Build the arena visuals (floor, walls, forest) without spawning enemies.
+ * Returns a dispose() function to clean up all meshes.
+ */
+export function buildArenaVisuals(scene) {
+  const tmp = new Room(scene, 1, {});
+  // Remove all enemies that were spawned (we don't need them)
+  for (const e of tmp.enemies) {
+    if (e.cleanup) e.cleanup();
+    if (e.mesh) scene.remove(e.mesh);
+  }
+  tmp.enemies = [];
+  return {
+    dispose() {
+      for (const mesh of tmp._meshes) scene.remove(mesh);
+      tmp._meshes = [];
+    },
+  };
+}

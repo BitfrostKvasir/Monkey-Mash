@@ -2,6 +2,68 @@
 import * as THREE from 'three';
 import { buildMonkeyMesh } from './monkey-model.js';
 
+// Build a simple but distinct 3D mesh per enemy type, matching solo visuals
+function _buildEnemyMesh(type) {
+  const add = (parent, geo, color, x = 0, y = 0, z = 0) => {
+    const m = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color }));
+    m.position.set(x, y, z);
+    m.castShadow = true;
+    parent.add(m);
+    return m;
+  };
+  const g = new THREE.Group();
+  switch (type) {
+    case 'bandit': {
+      // Leaner, lighter brown — banana thief look
+      add(g, new THREE.SphereGeometry(0.28, 8, 6), 0x8B4513, 0, 0.44, 0);
+      add(g, new THREE.SphereGeometry(0.32, 8, 6), 0x8B4513, 0, 1.02, 0);
+      add(g, new THREE.SphereGeometry(0.07, 5, 3), 0xffcc00, -0.11, 1.07, 0.28); // eye
+      add(g, new THREE.SphereGeometry(0.07, 5, 3), 0xffcc00,  0.11, 1.07, 0.28);
+      break;
+    }
+    case 'bomber': {
+      // Stocky green with bomb-like helmet
+      add(g, new THREE.SphereGeometry(0.35, 8, 6), 0x2a5520, 0, 0.46, 0);
+      add(g, new THREE.SphereGeometry(0.38, 8, 6), 0x2a5520, 0, 1.14, 0);
+      add(g, new THREE.CylinderGeometry(0.2, 0.38, 0.22, 8), 0x1a3a10, 0, 1.57, 0);
+      add(g, new THREE.SphereGeometry(0.08, 5, 3), 0xff4400, -0.12, 1.18, 0.32);
+      add(g, new THREE.SphereGeometry(0.08, 5, 3), 0xff4400,  0.12, 1.18, 0.32);
+      break;
+    }
+    case 'howler': {
+      // Spiky orange-furred bruiser
+      add(g, new THREE.SphereGeometry(0.33, 8, 6), 0xcc5500, 0, 0.46, 0);
+      add(g, new THREE.SphereGeometry(0.38, 8, 6), 0xcc5500, 0, 1.14, 0);
+      // Spikes on head
+      for (let i = 0; i < 5; i++) {
+        const a = (i / 5) * Math.PI * 2;
+        add(g, new THREE.ConeGeometry(0.07, 0.28, 4), 0xff7700, Math.cos(a)*0.3, 1.55, Math.sin(a)*0.3);
+      }
+      add(g, new THREE.SphereGeometry(0.08, 5, 3), 0xff2222, -0.12, 1.18, 0.32);
+      add(g, new THREE.SphereGeometry(0.08, 5, 3), 0xff2222,  0.12, 1.18, 0.32);
+      break;
+    }
+    case 'boss': {
+      // Large golden king
+      add(g, new THREE.SphereGeometry(0.55, 10, 8), 0xd4a017, 0, 0.6, 0);
+      add(g, new THREE.SphereGeometry(0.52, 10, 8), 0xd4a017, 0, 1.5, 0);
+      add(g, new THREE.CylinderGeometry(0.18, 0.52, 0.35, 8), 0xffcc00, 0, 2.05, 0);
+      add(g, new THREE.SphereGeometry(0.1, 5, 3), 0xff2222, -0.18, 1.55, 0.44);
+      add(g, new THREE.SphereGeometry(0.1, 5, 3), 0xff2222,  0.18, 1.55, 0.44);
+      break;
+    }
+    default: { // grunt
+      // Dark brown basic monkey enemy
+      add(g, new THREE.SphereGeometry(0.3, 8, 6), 0x2a1a0a, 0, 0.46, 0);
+      add(g, new THREE.SphereGeometry(0.36, 8, 6), 0x2a1a0a, 0, 1.1, 0);
+      add(g, new THREE.SphereGeometry(0.08, 6, 4), 0xff2222, -0.12, 1.16, 0.3);
+      add(g, new THREE.SphereGeometry(0.08, 6, 4), 0xff2222,  0.12, 1.16, 0.3);
+      break;
+    }
+  }
+  return g;
+}
+
 function disposeMesh(mesh) {
   mesh.geometry?.dispose();
   if (Array.isArray(mesh.material)) mesh.material.forEach(m => m.dispose());
@@ -85,13 +147,11 @@ export class MultiplayerRenderer {
     for (const e of enemies) {
       seen.add(String(e.id));
       if (!this._enemies[e.id]) {
-        const geo  = new THREE.SphereGeometry(0.4, 8, 6);
-        const mat  = new THREE.MeshLambertMaterial({ color: 0xcc3300 });
-        const mesh = new THREE.Mesh(geo, mat);
+        const mesh = _buildEnemyMesh(e.type);
         this.scene.add(mesh);
         this._enemies[e.id] = mesh;
       }
-      this._enemies[e.id].position.set(e.x, 0.4, e.z);
+      this._enemies[e.id].position.set(e.x, 0, e.z);
     }
     for (const id of Object.keys(this._enemies)) {
       if (!seen.has(id)) { this.scene.remove(this._enemies[id]); disposeMesh(this._enemies[id]); delete this._enemies[id]; }

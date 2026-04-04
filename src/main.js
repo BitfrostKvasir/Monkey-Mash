@@ -10,6 +10,7 @@ import { NetworkManager }       from './network.js';
 import { MultiplayerRenderer }  from './multiplayer-renderer.js';
 import { MultiplayerHUD }       from './multiplayer-hud.js';
 import { generateOffers }       from './upgrades.js';
+import { buildArenaVisuals }    from './room.js';
 
 initDamageNumbers(document.getElementById('dmg-layer'));
 
@@ -370,7 +371,8 @@ let net    = null;  // NetworkManager
 let mpRend = null;  // MultiplayerRenderer
 let mpHud  = null;  // MultiplayerHUD
 let mpMode = null;  // 'coop' | 'pvp'
-let _mpFloor = null;
+let _mpArena = null; // arena visuals disposer
+let _mpLastPhase = null; // track phase transitions for room-clear flash
 let _spectating = false;
 let _spectatorTarget = new THREE.Vector3(0, 0, 0);
 let last = performance.now();
@@ -417,18 +419,14 @@ function startMultiplayer(mode) {
   scene.add(sun);
   document.getElementById('hud').style.display = 'block';
   if (scoreHudEl) scoreHudEl.style.display = 'none';
-  if (roomNumEl)  roomNumEl.style.display   = 'none';
+  if (roomNumEl)  { roomNumEl.style.display = ''; roomNumEl.textContent = 'Room 1'; }
   if (bossHud)    bossHud.style.display     = 'none';
+  if (roomClearEl) roomClearEl.style.opacity = '0';
+  _mpLastPhase = 'fight';
 
-  // Build arena floor
-  if (_mpFloor) { _mpFloor.geometry.dispose(); _mpFloor.material.dispose(); }
-  _mpFloor = new THREE.Mesh(
-    new THREE.PlaneGeometry(22, 18),
-    new THREE.MeshLambertMaterial({ color: 0x2a4a2a })
-  );
-  _mpFloor.rotation.x = -Math.PI / 2;
-  _mpFloor.receiveShadow = true;
-  scene.add(_mpFloor);
+  // Build arena with proper walls, floor, and forest
+  _mpArena?.dispose();
+  _mpArena = buildArenaVisuals(scene);
 
   mpRend = new MultiplayerRenderer(scene, net.mySocketId);
   mpHud  = new MultiplayerHUD(mode);
@@ -438,7 +436,8 @@ function stopMultiplayer() {
   mpRend?.destroy(); mpRend = null;
   mpHud?.destroy();  mpHud  = null;
   mpMode = null;
-  if (_mpFloor) { _mpFloor.geometry.dispose(); _mpFloor.material.dispose(); _mpFloor = null; }
+  _mpArena?.dispose(); _mpArena = null;
+  _mpLastPhase = null;
   _spectating = false;
   camera.position.set(0, 26, 1);
   camera.lookAt(0, 0, 0);
@@ -711,9 +710,39 @@ function loop() {
     if (state) {
       mpRend.applyState(state);
       mpHud.update(state, net.mySocketId);
-      // Update local player HP bar from server state
+
+      // Update local player HP bar and special indicator from server state
       const me = mpRend.getMyState(state);
-      if (me && hpFill) hpFill.style.width = ((me.hp / (me.maxHp || 100)) * 100).toFixed(1) + '%';
+      if (me) {
+        if (hpFill) hpFill.style.width = ((me.hp / (me.maxHp || 100)) * 100).toFixed(1) + '%';
+        if (specialIndicator) {
+          const cdRatio = me.specialCdRatio ?? 0;
+          specialIcon.textContent = me.playerClass === 'brawler' ? '🔥' : me.playerClass === 'slinger' ? '🌀' : '👻';
+          specialName.textContent = me.playerClass === 'brawler' ? 'Rage' : me.playerClass === 'slinger' ? 'Barrage' : 'Decoy';
+          const pct = (1 - cdRatio) * 100;
+          specialCdFill.style.width = pct.toFixed(1) + '%';
+          specialCdFill.style.background = me.specialActive
+            ? 'linear-gradient(90deg, #ffaa22, #ffcc44)'
+            : cdRatio === 0
+              ? 'linear-gradient(90deg, #44ff88, #88ff44)'
+              : 'linear-gradient(90deg, #4488ff, #66aaff)';
+          specialIndicator.className = me.specialActive ? 'active' : cdRatio === 0 ? 'ready' : '';
+        }
+      }
+
+      // Room number
+      if (roomNumEl && state.roomNumber) roomNumEl.textContent = 'Room ' + state.roomNumber;
+
+      // Room clear flash when fight phase ends
+      if (state.phase !== _mpLastPhase) {
+        if (_mpLastPhase === 'fight' && (state.phase === 'vacuum' || state.phase === 'shop')) {
+          if (roomClearEl) {
+            roomClearEl.style.opacity = '1';
+            setTimeout(() => { if (roomClearEl) roomClearEl.style.opacity = '0'; }, 1200);
+          }
+        }
+        _mpLastPhase = state.phase;
+      }
     }
     // Send inputs every frame
     const keys = [];
@@ -734,13 +763,6 @@ function loop() {
       camera.position.x  = THREE.MathUtils.lerp(camera.position.x, _spectatorTarget.x, 0.1);
       camera.position.z  = THREE.MathUtils.lerp(camera.position.z, _spectatorTarget.z + 1, 0.1);
       camera.lookAt(_spectatorTarget.x, 0, _spectatorTarget.z);
-    } else if (state) {
-      const me = mpRend.getMyState(state);
-      if (me) {
-        camera.position.x = THREE.MathUtils.lerp(camera.position.x, me.x, 0.1);
-        camera.position.z = THREE.MathUtils.lerp(camera.position.z, me.z + 1, 0.1);
-        camera.lookAt(me.x, 0, me.z);
-      }
     }
     renderer.render(scene, camera);
     return;
