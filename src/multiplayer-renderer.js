@@ -74,8 +74,8 @@ export class MultiplayerRenderer {
   constructor(scene, mySocketId) {
     this.scene      = scene;
     this.mySocketId = mySocketId;
-    this._players   = {}; // socketId -> { mesh, ring, baseColors }
-    this._enemies   = {}; // id -> mesh
+    this._players   = {}; // socketId -> { mesh, ring, baseColors, aimArc? }
+    this._enemies   = {}; // id -> { mesh, hpBg, hpFg }
     this._bananas   = {}; // id -> mesh
   }
 
@@ -104,6 +104,24 @@ export class MultiplayerRenderer {
         ring.position.y = 0.02;
         ring.visible = false;
         group.add(ring);
+
+        // Aim arc — only for local player, shows attack cone direction
+        let aimArc = null;
+        if (p.socketId === this.mySocketId) {
+          const arcPts = [];
+          const ARC = Math.PI * 0.65, RANGE = 2.1, SEGS = 16;
+          arcPts.push(0, 0.05, 0);
+          for (let i = 0; i <= SEGS; i++) {
+            const a = -ARC / 2 + (i / SEGS) * ARC;
+            arcPts.push(Math.sin(a) * RANGE, 0.05, Math.cos(a) * RANGE);
+          }
+          arcPts.push(0, 0.05, 0);
+          const arcGeo = new THREE.BufferGeometry();
+          arcGeo.setAttribute('position', new THREE.Float32BufferAttribute(arcPts, 3));
+          aimArc = new THREE.Line(arcGeo, new THREE.LineBasicMaterial({ color: 0x44ffaa, transparent: true, opacity: 0.55 }));
+          group.add(aimArc);
+        }
+
         this.scene.add(group);
 
         // Collect base colors at creation time
@@ -111,7 +129,7 @@ export class MultiplayerRenderer {
         group.traverse(c => {
           if (c.isMesh && c.material?.color) baseColors[c.uuid] = c.material.color.getHex();
         });
-        this._players[p.socketId] = { mesh: group, ring, baseColors };
+        this._players[p.socketId] = { mesh: group, ring, baseColors, aimArc };
       }
       const entry = this._players[p.socketId];
       entry.mesh.position.set(p.x, 0, p.z);
@@ -148,13 +166,44 @@ export class MultiplayerRenderer {
       seen.add(String(e.id));
       if (!this._enemies[e.id]) {
         const mesh = _buildEnemyMesh(e.type);
+
+        // HP bar — background track + foreground fill as child meshes
+        const barW = 0.7, barH = 0.08;
+        const hpBg = new THREE.Mesh(
+          new THREE.PlaneGeometry(barW, barH),
+          new THREE.MeshBasicMaterial({ color: 0x333333, side: THREE.DoubleSide, depthWrite: false })
+        );
+        hpBg.rotation.x = -Math.PI / 2;
+        hpBg.position.set(0, 1.9, 0);
+        mesh.add(hpBg);
+
+        const hpFg = new THREE.Mesh(
+          new THREE.PlaneGeometry(barW, barH),
+          new THREE.MeshBasicMaterial({ color: 0x44ff44, side: THREE.DoubleSide, depthWrite: false })
+        );
+        hpFg.rotation.x = -Math.PI / 2;
+        hpFg.position.set(0, 1.91, 0);
+        mesh.add(hpFg);
+
         this.scene.add(mesh);
-        this._enemies[e.id] = mesh;
+        this._enemies[e.id] = { mesh, hpBg, hpFg };
       }
-      this._enemies[e.id].position.set(e.x, 0, e.z);
+      const entry = this._enemies[e.id];
+      entry.mesh.position.set(e.x, 0, e.z);
+
+      // Update HP bar fill
+      const pct = Math.max(0, e.hp / (e.maxHp || 1));
+      entry.hpFg.scale.x = pct;
+      entry.hpFg.position.x = -(1 - pct) * 0.35; // slide left as HP drops
+      entry.hpFg.material.color.setHex(pct > 0.5 ? 0x44cc44 : pct > 0.25 ? 0xffcc00 : 0xff4444);
     }
     for (const id of Object.keys(this._enemies)) {
-      if (!seen.has(id)) { this.scene.remove(this._enemies[id]); disposeMesh(this._enemies[id]); delete this._enemies[id]; }
+      if (!seen.has(id)) {
+        const entry = this._enemies[id];
+        this.scene.remove(entry.mesh);
+        entry.mesh.traverse(c => { if (c.isMesh) disposeMesh(c); });
+        delete this._enemies[id];
+      }
     }
   }
 
@@ -182,7 +231,10 @@ export class MultiplayerRenderer {
       this.scene.remove(mesh);
       mesh.traverse(c => { if (c.isMesh) disposeMesh(c); });
     }
-    for (const mesh of Object.values(this._enemies))  { this.scene.remove(mesh); disposeMesh(mesh); }
+    for (const entry of Object.values(this._enemies)) {
+      this.scene.remove(entry.mesh);
+      entry.mesh.traverse(c => { if (c.isMesh) disposeMesh(c); });
+    }
     for (const mesh of Object.values(this._bananas))  { this.scene.remove(mesh); disposeMesh(mesh); }
     this._players = {}; this._enemies = {}; this._bananas = {};
   }

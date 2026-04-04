@@ -11,11 +11,11 @@ export class MultiplayerHUD {
     this._nodes = []; // all appended DOM nodes for cleanup
 
     if (mode === 'coop') {
-      // ── Co-op: compact right-side panel, keeps existing HP bar clear ──
+      // ── Co-op: compact right-side panel below the top-right HUD ──
       this._el = document.createElement('div');
       this._el.id = 'mp-hud';
       this._el.style.cssText = `
-        position: fixed; top: 12px; right: 12px; z-index: 30;
+        position: fixed; top: 60px; right: 12px; z-index: 30;
         display: flex; flex-direction: column; gap: 6px;
         pointer-events: none;
       `;

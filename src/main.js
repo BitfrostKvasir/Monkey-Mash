@@ -3,7 +3,7 @@ import { Game }     from './game.js';
 import { Tutorial } from './tutorial.js';
 import { InputManager } from './input.js';
 import { Menu, PLAYER_COLORS, HATS, PLAYER_CLASSES } from './menu.js';
-import { initDamageNumbers, updateDmgNums, setDmgNumColor } from './damage-numbers.js';
+import { initDamageNumbers, updateDmgNums, setDmgNumColor, spawnDmgNum } from './damage-numbers.js';
 import { openBestiary } from './bestiary.js';
 import { UPGRADES }     from './upgrades.js';
 import { NetworkManager }       from './network.js';
@@ -904,6 +904,19 @@ new Menu(
         _hideGameLoadingOverlay();
         net.onGameState = null; // one-shot
       };
+    };
+
+    net.onEnemyHit = ({ id, dmg }) => {
+      if (!mpRend || !net.gameState) return;
+      // Find world position — check enemies first, then players (for PvP hits)
+      const state = net.gameState;
+      const enemy = state.enemies?.find(e => String(e.id) === String(id));
+      if (enemy) {
+        spawnDmgNum(dmg, new THREE.Vector3(enemy.x, 1.2, enemy.z));
+        return;
+      }
+      const player = state.players?.find(p => p.socketId === id);
+      if (player) spawnDmgNum(dmg, new THREE.Vector3(player.x, 1.4, player.z));
     };
 
     net.onOpenShop = ({ sharedPool }) => {
