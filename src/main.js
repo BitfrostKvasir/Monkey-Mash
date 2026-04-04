@@ -828,6 +828,7 @@ new Menu(
     net = new NetworkManager();
 
     net.onGameStarting = ({ mode }) => {
+      m._overlay?.remove();
       _showGameLoadingOverlay(mode);
       startMultiplayer(mode);
       // Dismiss overlay on first game state packet
