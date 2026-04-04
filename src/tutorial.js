@@ -532,6 +532,12 @@ export class Tutorial {
 
     this._bubble.show(step.text, hint);
 
+    // Offset ability HUD upward on the combat step so speech bubble doesn't cover it
+    const abilityHud = document.getElementById('bottom-left-hud');
+    if (abilityHud) {
+      abilityHud.style.bottom = step.id === 'combat' ? '200px' : '20px';
+    }
+
     // Step setup
     if (step.id === 'bananas') {
       this._spawnBananas();
@@ -595,6 +601,9 @@ export class Tutorial {
 
   _end() {
     this.isOver = true;
+    // Restore ability HUD position
+    const abilityHud = document.getElementById('bottom-left-hud');
+    if (abilityHud) abilityHud.style.bottom = '20px';
     this._bubble.destroy();
     this._progress.destroy();
     this._cleanupBananas();
