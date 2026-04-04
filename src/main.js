@@ -813,6 +813,12 @@ new Menu(
       console.error('Multiplayer connection error:', err);
     };
 
+    net.onKicked = () => {
+      stopMultiplayer();
+      net?.destroy(); net = null;
+      new Menu(cfg => startGame(cfg), () => startTutorial(), () => {});
+    };
+
     // Show multiplayer screen via menu
     const m = new Menu(
       (config) => startGame(config),

@@ -28,8 +28,10 @@ function broadcastLobby(io, room) {
 export function handleSocket(io, socket) {
   // ── Lobby events ──────────────────────────────────────────────
 
-  socket.on('create-room', (playerData) => {
+  socket.on('create-room', ({ mode, difficulty, ...playerData }) => {
     const room = createRoom(socket.id, playerData, true);
+    if (mode) room.mode = mode;
+    if (difficulty) room.difficulty = difficulty;
     socket.join(room.id);
     socket.emit('room-joined', { code: room.id });
     broadcastLobby(io, room);
@@ -62,11 +64,39 @@ export function handleSocket(io, socket) {
     }
   });
 
-  socket.on('set-ready', ({ ready }) => {
+  socket.on('set-ready', async ({ ready }) => {
     const room = getRoomBySocket(socket.id);
     if (!room) return;
     const player = room.players.find(p => p.socketId === socket.id);
     if (player) player.ready = ready;
+    broadcastLobby(io, room);
+
+    // Auto-start when all players are ready (min 2)
+    if (room.phase === 'lobby' && room.players.length >= 2 && room.players.every(p => p.ready)) {
+      room.phase = 'game';
+      io.to(room.id).emit('game-starting', { mode: room.mode, difficulty: room.difficulty });
+      if (room.mode === 'coop') {
+        const { ServerGame } = await import('./server-game.js');
+        room.game = new ServerGame(io, room);
+        room.game.start();
+      } else {
+        const { PvPGame } = await import('./server-pvp.js');
+        room.game = new PvPGame(io, room);
+        room.game.start();
+      }
+    }
+  });
+
+  socket.on('kick-player', ({ targetSocketId }) => {
+    const room = getRoomBySocket(socket.id);
+    if (!room) return;
+    const host = room.players.find(p => p.socketId === socket.id);
+    if (!host?.isHost) return;
+    const target = room.players.find(p => p.socketId === targetSocketId);
+    if (!target || target.isHost) return;
+    room.players = room.players.filter(p => p.socketId !== targetSocketId);
+    const targetSocket = io.sockets.sockets.get(targetSocketId);
+    if (targetSocket) { targetSocket.leave(room.id); targetSocket.emit('kicked'); }
     broadcastLobby(io, room);
   });
 
