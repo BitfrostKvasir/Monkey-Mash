@@ -28,8 +28,9 @@ export class ServerGame {
     this._transTimer  = 0;
     this._tickInterval = null;
     this._bananaId    = 1;
-    this._inputs      = {};
-    this.pausedBy     = null; // socketId of who paused, or null
+    this._inputs        = {};
+    this.pausedBy       = null;
+    this._shopReadySet  = new Set();
   }
 
   pause(socketId) {
@@ -132,8 +133,13 @@ export class ServerGame {
     if (this.phase === 'vacuum') {
       this._vacuumTimer -= dt;
       if (this._vacuumTimer <= 0) {
+        // Auto-collect all remaining bananas
+        for (const b of this.bananas) {
+          if (!b.collected) { b.collected = true; this.sharedPool++; }
+        }
         this.phase = 'shop';
-        this.io.to(this.room.id).emit('open-shop', { sharedPool: this.sharedPool });
+        this._shopReadySet = new Set();
+        this.io.to(this.room.id).emit('open-shop', { sharedPool: this.sharedPool, roomNumber: this.roomNumber });
       }
     }
 
@@ -149,10 +155,26 @@ export class ServerGame {
     this._broadcast();
   }
 
+  shopReady(socketId) {
+    if (this.phase !== 'shop') return;
+    this._shopReadySet.add(socketId);
+    const total = Object.keys(this.players).length;
+    const readyCount = this._shopReadySet.size;
+    this.io.to(this.room.id).emit('shop-ready-update', {
+      readyCount,
+      total,
+      readyIds: [...this._shopReadySet],
+    });
+    if (readyCount >= total) {
+      this.advanceFromShop();
+    }
+  }
+
   advanceFromShop() {
     this.phase = 'transition';
     this._transTimer = TRANSITION_DURATION;
     this.bananas = [];
+    this._shopReadySet = new Set();
   }
 
   _resolveAttack(player, atk) {

@@ -464,6 +464,8 @@ function stopMultiplayer() {
   _mpLastPhase = null;
   _mpIsPaused = false; _mpPausedBy = null;
   document.getElementById('mp-pause-overlay')?.remove();
+  document.getElementById('coop-shop-overlay')?.remove();
+  if (net) { net.onPoolUpdate = null; net.onShopReadyUpdate = null; }
   _spectating = false;
   camera.position.set(0, 26, 1);
   camera.lookAt(0, 0, 0);
@@ -550,44 +552,121 @@ document.getElementById('btn-go-exit')?.addEventListener('click', () => {
 });
 
 // ── Multiplayer overlay helpers ───────────────────────────────────
-function _buildCoopShopOverlay(offers, sharedPool) {
-  const existing = document.getElementById('coop-shop-overlay');
-  if (existing) existing.remove();
+function _buildCoopShopOverlay(offers, sharedPool, roomNumber) {
+  document.getElementById('coop-shop-overlay')?.remove();
+
+  const costColor = c => c <= 1 ? '#88ff44' : c === 2 ? '#ffcc00' : c === 3 ? '#ff7755' : '#cc44ff';
+  const costLabel = c => c <= 1 ? 'Common'  : c === 2 ? 'Uncommon' : c === 3 ? 'Rare'   : 'Epic';
+
   const overlay = document.createElement('div');
   overlay.id = 'coop-shop-overlay';
-  overlay.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,0.75);
-    display:flex;align-items:center;justify-content:center;z-index:40`;
-  overlay.innerHTML = `
-    <div style="background:#0b1608;border:2px solid #44cc22;border-radius:12px;padding:24px;max-width:500px;width:90%">
-      <div style="font-family:'Press Start 2P',monospace;font-size:12px;color:#88ff44;margin-bottom:6px">Shop</div>
-      <div style="font-family:'Press Start 2P',monospace;font-size:8px;color:#557744;margin-bottom:16px">
-        Shared Pool: 🍌 <span id="coop-pool">${sharedPool}</span>
-      </div>
-      <div id="coop-offers" style="display:flex;flex-direction:column;gap:8px"></div>
-      <button id="coop-shop-done" class="home-btn" style="margin-top:16px;width:100%">Continue →</button>
-    </div>
+  overlay.style.cssText = `
+    position:fixed; inset:0;
+    display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+    z-index:200;
+    background:rgba(0,0,0,0.72);
+    font-family:'Arial Black',sans-serif;
+    color:#fff;
   `;
+
+  overlay.innerHTML = `
+    <div style="text-align:center; margin-bottom:20px; user-select:none;">
+      <div style="font-size:26px; letter-spacing:5px; text-transform:uppercase; opacity:.9;">Upgrade Shop</div>
+      <div style="font-size:13px; color:#ffe135; margin-top:6px;">Room ${roomNumber} complete — Shared Pool: 🍌 <span id="coop-pool">${sharedPool}</span></div>
+    </div>
+
+    <div style="display:flex; gap:14px; margin-bottom:26px; user-select:none; flex-wrap:wrap; justify-content:center; max-width:760px;" id="coop-offers"></div>
+
+    <button id="coop-ready-btn" style="
+      font-family:'Arial Black',sans-serif;
+      font-size:13px; letter-spacing:2px; text-transform:uppercase;
+      padding:10px 30px;
+      border:2px solid #44cc22; border-radius:30px;
+      cursor:pointer; background:rgba(68,204,34,0.15); color:#88ff44;
+      transition:background .12s;
+    ">✔ Ready Up</button>
+
+    <div id="coop-ready-status" style="
+      font-size:11px; color:rgba(255,255,255,0.45); margin-top:10px;
+      font-family:Arial,sans-serif; display:none;
+    "></div>
+  `;
+
   document.body.appendChild(overlay);
+
+  // Build upgrade cards
   const offerEl = overlay.querySelector('#coop-offers');
   for (const u of offers) {
-    const btn = document.createElement('button');
-    btn.className = 'home-btn';
-    btn.style.cssText = 'width:100%;text-align:left;padding:10px 14px;font-size:8px';
-    btn.innerHTML = `${u.icon} ${u.label} <span style="color:#ffcc44">🍌${u.cost}</span> — ${u.desc}`;
-    btn.addEventListener('click', () => {
-      net.buyUpgrade(u.id);
-      if (net) net.onPoolUpdate = null;
-      overlay.remove();
-    });
-    offerEl.appendChild(btn);
+    const can = sharedPool >= u.cost;
+    const card = document.createElement('div');
+    card.className = 'shop-card';
+    card.dataset.id = u.id;
+    card.style.cssText = `
+      cursor:${can ? 'pointer' : 'default'};
+      opacity:${can ? '1' : '0.4'};
+      border:2px solid ${costColor(u.cost)};
+      border-radius:14px;
+      padding:18px 14px;
+      width:150px;
+      text-align:center;
+      background:rgba(255,255,255,0.06);
+      transition:transform .12s, background .12s;
+    `;
+    card.innerHTML = `
+      <div style="font-size:30px; margin-bottom:5px;">${u.icon}</div>
+      <div style="font-size:10px; letter-spacing:2px; color:${costColor(u.cost)}; margin-bottom:5px; text-transform:uppercase;">${costLabel(u.cost)}</div>
+      <div style="font-size:14px; margin-bottom:7px; line-height:1.2;">${u.label}</div>
+      <div style="font-size:10px; opacity:.6; font-family:Arial,sans-serif; font-weight:normal; margin-bottom:10px; line-height:1.4;">${u.desc}</div>
+      <div style="font-size:13px; color:${can ? '#ffe135' : '#666'};">🍌 ${u.cost}</div>
+    `;
+    if (can) {
+      card.addEventListener('mouseenter', () => { card.style.transform = 'scale(1.05)'; card.style.background = 'rgba(255,255,255,0.13)'; });
+      card.addEventListener('mouseleave', () => { card.style.transform = 'scale(1)'; card.style.background = 'rgba(255,255,255,0.06)'; });
+      card.addEventListener('click', () => {
+        net.buyUpgrade(u.id);
+        // Mark card as purchased visually
+        card.style.opacity = '0.5';
+        card.style.cursor = 'default';
+        card.querySelectorAll('div').forEach(d => { d.style.pointerEvents = 'none'; });
+        card.replaceWith(card.cloneNode(true)); // remove listeners
+      });
+    }
+    offerEl.appendChild(card);
   }
-  overlay.querySelector('#coop-shop-done').addEventListener('click', () => {
-    if (net) net.onPoolUpdate = null;
-    overlay.remove();
-  });
+
+  // Pool update
   net.onPoolUpdate = ({ sharedPool: p }) => {
     const el = document.getElementById('coop-pool');
     if (el) el.textContent = p;
+  };
+
+  // Ready button
+  let hasReadied = false;
+  overlay.querySelector('#coop-ready-btn').addEventListener('click', () => {
+    if (hasReadied) return;
+    hasReadied = true;
+    net.sendShopReady();
+    const btn = overlay.querySelector('#coop-ready-btn');
+    if (btn) { btn.textContent = '⏳ Waiting...'; btn.style.opacity = '0.6'; btn.style.cursor = 'default'; }
+    const status = overlay.querySelector('#coop-ready-status');
+    if (status) status.style.display = 'block';
+  });
+
+  // Ready update from server
+  net.onShopReadyUpdate = ({ readyCount, total }) => {
+    const status = document.getElementById('coop-ready-status');
+    if (status) {
+      status.style.display = 'block';
+      status.textContent = `${readyCount} / ${total} players ready`;
+    }
+    if (readyCount >= total) {
+      net.onPoolUpdate = null;
+      net.onShopReadyUpdate = null;
+      overlay.style.transition = 'opacity 0.2s';
+      overlay.style.opacity = '0';
+      setTimeout(() => overlay.remove(), 220);
+    }
   };
 }
 
@@ -936,11 +1015,12 @@ new Menu(
       if (player) spawnDmgNum(dmg, new THREE.Vector3(player.x, 1.4, player.z));
     };
 
-    net.onOpenShop = ({ sharedPool }) => {
+    net.onOpenShop = ({ sharedPool, roomNumber }) => {
       const me = net.gameState?.players?.find(p => p.socketId === net.mySocketId);
       const cls = me?.playerClass || 'brawler';
-      const offers = generateOffers(sharedPool, 1, cls, false, false, []);
-      _buildCoopShopOverlay(offers, sharedPool);
+      const rn = roomNumber || net.gameState?.roomNumber || 1;
+      const offers = generateOffers(sharedPool, rn, cls, false, false, []);
+      _buildCoopShopOverlay(offers, sharedPool, rn);
     };
 
     net.onGameOver = () => {

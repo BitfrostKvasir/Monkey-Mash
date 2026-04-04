@@ -178,6 +178,12 @@ export function handleSocket(io, socket) {
     room.game.chooseUpgrade(socket.id, upgradeId);
   });
 
+  socket.on('shop-ready', () => {
+    const room = getRoomBySocket(socket.id);
+    if (!room?.game?.shopReady) return;
+    room.game.shopReady(socket.id);
+  });
+
   socket.on('pause-game', () => {
     const room = getRoomBySocket(socket.id);
     if (!room?.game?.pause) return;
