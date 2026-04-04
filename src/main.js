@@ -370,6 +370,7 @@ let net    = null;  // NetworkManager
 let mpRend = null;  // MultiplayerRenderer
 let mpHud  = null;  // MultiplayerHUD
 let mpMode = null;  // 'coop' | 'pvp'
+let _mpFloor = null;
 let last = performance.now();
 let lastConfig = null;
 
@@ -418,13 +419,14 @@ function startMultiplayer(mode) {
   if (bossHud)    bossHud.style.display     = 'none';
 
   // Build arena floor
-  const floor = new THREE.Mesh(
+  if (_mpFloor) { _mpFloor.geometry.dispose(); _mpFloor.material.dispose(); }
+  _mpFloor = new THREE.Mesh(
     new THREE.PlaneGeometry(22, 18),
     new THREE.MeshLambertMaterial({ color: 0x2a4a2a })
   );
-  floor.rotation.x = -Math.PI / 2;
-  floor.receiveShadow = true;
-  scene.add(floor);
+  _mpFloor.rotation.x = -Math.PI / 2;
+  _mpFloor.receiveShadow = true;
+  scene.add(_mpFloor);
 
   mpRend = new MultiplayerRenderer(scene, net.mySocketId);
   mpHud  = new MultiplayerHUD(mode);
@@ -434,6 +436,7 @@ function stopMultiplayer() {
   mpRend?.destroy(); mpRend = null;
   mpHud?.destroy();  mpHud  = null;
   mpMode = null;
+  if (_mpFloor) { _mpFloor.geometry.dispose(); _mpFloor.material.dispose(); _mpFloor = null; }
   document.getElementById('hud').style.display = 'none';
   if (scoreHudEl) scoreHudEl.style.display = '';
   if (roomNumEl)  roomNumEl.style.display  = '';
@@ -539,11 +542,15 @@ function _buildCoopShopOverlay(offers, sharedPool) {
     btn.innerHTML = `${u.icon} ${u.label} <span style="color:#ffcc44">🍌${u.cost}</span> — ${u.desc}`;
     btn.addEventListener('click', () => {
       net.buyUpgrade(u.id);
+      if (net) net.onPoolUpdate = null;
       overlay.remove();
     });
     offerEl.appendChild(btn);
   }
-  overlay.querySelector('#coop-shop-done').addEventListener('click', () => overlay.remove());
+  overlay.querySelector('#coop-shop-done').addEventListener('click', () => {
+    if (net) net.onPoolUpdate = null;
+    overlay.remove();
+  });
   net.onPoolUpdate = ({ sharedPool: p }) => {
     const el = document.getElementById('coop-pool');
     if (el) el.textContent = p;
@@ -551,6 +558,7 @@ function _buildCoopShopOverlay(offers, sharedPool) {
 }
 
 function _buildPvpUpgradeOverlay(offers) {
+  document.getElementById('pvp-upgrade-overlay')?.remove();
   const overlay = document.createElement('div');
   overlay.id = 'pvp-upgrade-overlay';
   overlay.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,0.8);
@@ -594,7 +602,7 @@ function _showMatchEndScreen(winnerId, scores) {
   document.body.appendChild(overlay);
   overlay.querySelector('#btn-rematch').addEventListener('click', () => {
     overlay.remove();
-    net.startGame();
+    net?.startGame();
   });
   overlay.querySelector('#btn-back-menu').addEventListener('click', () => {
     overlay.remove();
