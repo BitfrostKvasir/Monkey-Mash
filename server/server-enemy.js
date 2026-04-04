@@ -69,15 +69,22 @@ export class ServerEnemy {
 
 export function spawnWave(roomNumber, playerCount, difficulty) {
   const hpMults = { easy: 0.65, normal: 1.0, hard: 1.45 };
-  const hpMult  = (hpMults[difficulty] ?? 1.0) * (1 + (roomNumber - 1) * 0.25) * (1 + (playerCount - 1) * 0.3);
-  const count   = Math.min(3 + roomNumber + playerCount, 12);
-  const types   = ['grunt', 'bandit', 'bomber', 'howler'];
+  const excessRooms = Math.max(0, roomNumber - 20);
+  const hpMult = (hpMults[difficulty] ?? 1.0)
+    * (1 + (roomNumber - 1) * 0.25)
+    * Math.pow(1.12, excessRooms)
+    * (1 + (playerCount - 1) * 0.3);
+  const speedMult = 1 + excessRooms * 0.04;
+  const count = Math.min(3 + roomNumber + playerCount + excessRooms, 16);
+  const types = ['grunt', 'bandit', 'bomber', 'howler'];
   const enemies = [];
   for (let i = 0; i < count; i++) {
     const angle = (i / count) * Math.PI * 2;
     const r     = 6 + Math.random() * 3;
     const type  = types[Math.min(Math.floor(roomNumber / 3), types.length - 1)];
-    enemies.push(new ServerEnemy(type, Math.cos(angle) * r, Math.sin(angle) * r, hpMult));
+    const e = new ServerEnemy(type, Math.cos(angle) * r, Math.sin(angle) * r, hpMult);
+    if (speedMult > 1) e.speed *= speedMult;
+    enemies.push(e);
   }
   return enemies;
 }

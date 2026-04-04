@@ -160,7 +160,12 @@ export class Room {
       return;
     }
 
-    const count = 3 + Math.floor(roomNumber * 1.2);
+    // Linear scaling up to room 20; exponential beyond that
+    const excessRooms = Math.max(0, roomNumber - 20);
+    const hpScale = (1 + (roomNumber - 1) * 0.25) * Math.pow(1.12, excessRooms);
+    const speedScale = 1 + excessRooms * 0.04; // +4% speed per room past 20
+
+    const count = Math.min(3 + Math.floor(roomNumber * 1.2) + excessRooms, 18);
     const hw = ROOM_W / 2 - 2;
     const hh = ROOM_H / 2 - 2;
 
@@ -191,8 +196,9 @@ export class Room {
         case 'thunder':   enemy = new ThunderSimian(this.scene, x, z);  break;
         default:          enemy = new GruntEnemy(this.scene, x, z);     break;
       }
-      enemy.hp    = Math.floor(enemy.hp * (1 + (roomNumber - 1) * 0.25) * this._enemyHpMult);
+      enemy.hp    = Math.floor(enemy.hp * hpScale * this._enemyHpMult);
       enemy.maxHp = enemy.hp;
+      if (speedScale > 1 && enemy.speed !== undefined) enemy.speed *= speedScale;
       this.enemies.push(enemy);
     }
   }
