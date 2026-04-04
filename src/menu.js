@@ -457,6 +457,7 @@ export class Menu {
     this._colorIdx    = 0;
     this._hat         = 'none';
     this._playerClass = 'brawler';
+    this._playerName  = '';
     this._difficulty  = 'normal';
 
     injectMenuStyles();
@@ -732,7 +733,7 @@ export class Menu {
       playerClass: this._playerClass,
       colour: PLAYER_COLORS[this._colorIdx]?.value ?? 0x7B3F00,
       hat: this._hat,
-      name: 'Player',
+      name: this._playerName.trim() || 'Player',
     });
 
     this._overlay.querySelector('#btn-quick-play').addEventListener('click', () => {
@@ -926,6 +927,12 @@ export class Menu {
   _renderLobbyCustomiser(el) {
     el.innerHTML = `
       <div style="background:rgba(0,0,0,0.6);border:1px solid #335522;border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:12px">
+        <div style="font-family:'Press Start 2P',monospace;font-size:8px;color:#88ff44">Name</div>
+        <input id="lc-name" maxlength="16" placeholder="Enter name..."
+          value="${escLobbyHtml(this._playerName)}"
+          style="background:#111a0e;border:1px solid #335522;border-radius:6px;color:#ccffaa;
+          font-family:'Press Start 2P',monospace;font-size:9px;padding:8px 10px;outline:none;width:100%;box-sizing:border-box" />
+
         <div style="font-family:'Press Start 2P',monospace;font-size:8px;color:#88ff44">Class</div>
         <div style="display:flex;gap:6px">
           ${PLAYER_CLASSES.map(c => `
@@ -986,6 +993,12 @@ export class Menu {
         this._net.updateCustomisation({ hat: this._hat });
         this._renderLobbyCustomiser(el);
       });
+    });
+
+    const nameInput = el.querySelector('#lc-name');
+    nameInput.addEventListener('input', () => {
+      this._playerName = nameInput.value;
+      this._net.updateCustomisation({ name: this._playerName.trim() || 'Player' });
     });
 
     el.querySelector('#lc-close').addEventListener('click', () => {
