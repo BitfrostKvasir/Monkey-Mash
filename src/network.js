@@ -26,6 +26,8 @@ export class NetworkManager {
     this.onOpenPvpUpgrade = null;
     this.onWaitingUpgrade = null;
     this.onMatchEnd       = null;
+    this.onPlayerLeave    = null;
+    this.onConnectError   = null;
 
     this.socket.on('connect', () => { this.mySocketId = this.socket.id; });
     this.socket.on('lobby-update',    d => this.onLobbyUpdate?.(d));
@@ -45,6 +47,8 @@ export class NetworkManager {
     this.socket.on('open-pvp-upgrade',() => this.onOpenPvpUpgrade?.());
     this.socket.on('waiting-for-upgrade', d => this.onWaitingUpgrade?.(d));
     this.socket.on('match-end',       d => this.onMatchEnd?.(d));
+    this.socket.on('player-leave',    d => this.onPlayerLeave?.(d));
+    this.socket.on('connect_error',   e => this.onConnectError?.(e));
   }
 
   // Lobby
