@@ -734,6 +734,13 @@ function loop() {
       camera.position.x  = THREE.MathUtils.lerp(camera.position.x, _spectatorTarget.x, 0.1);
       camera.position.z  = THREE.MathUtils.lerp(camera.position.z, _spectatorTarget.z + 1, 0.1);
       camera.lookAt(_spectatorTarget.x, 0, _spectatorTarget.z);
+    } else if (state) {
+      const me = mpRend.getMyState(state);
+      if (me) {
+        camera.position.x = THREE.MathUtils.lerp(camera.position.x, me.x, 0.1);
+        camera.position.z = THREE.MathUtils.lerp(camera.position.z, me.z + 1, 0.1);
+        camera.lookAt(me.x, 0, me.z);
+      }
     }
     renderer.render(scene, camera);
     return;

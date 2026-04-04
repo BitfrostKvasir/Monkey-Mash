@@ -31,7 +31,6 @@ export class MultiplayerRenderer {
   _syncPlayers(players) {
     const seen = new Set();
     for (const p of players) {
-      if (p.socketId === this.mySocketId) continue; // local player rendered separately
       seen.add(p.socketId);
       if (!this._players[p.socketId]) {
         const { group } = buildMonkeyMesh(p.colour, p.hat);
