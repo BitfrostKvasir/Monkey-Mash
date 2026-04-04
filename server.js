@@ -3,6 +3,8 @@ import session        from 'express-session';
 import path           from 'path';
 import { fileURLToPath } from 'url';
 import { createHash }    from 'crypto';
+import { createServer } from 'http';
+import { Server as SocketServer } from 'socket.io';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -131,7 +133,16 @@ app.get('/{*splat}', requireAuth, (req, res) => {
 });
 
 // ── Start ─────────────────────────────────────────────────────────
-app.listen(PORT, () => {
+const httpServer = createServer(app);
+export const io = new SocketServer(httpServer, {
+  transports: ['websocket', 'polling'],
+});
+
+import('./server/socket-handlers.js').then(({ handleSocket }) => {
+  io.on('connection', socket => handleSocket(io, socket));
+});
+
+httpServer.listen(PORT, () => {
   console.log(`🐒 Monkey Mash running at http://localhost:${PORT}`);
   console.log(`   Password: ${GAME_PASSWORD}`);
   console.log(`   To change: set GAME_PASSWORD env var before starting`);

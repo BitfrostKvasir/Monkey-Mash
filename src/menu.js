@@ -445,10 +445,15 @@ function injectMenuStyles() {
   document.head.appendChild(s);
 }
 
+function escLobbyHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 export class Menu {
-  constructor(onPlay, onTutorial) {
-    this.onPlay     = onPlay;
-    this.onTutorial = onTutorial;
+  constructor(onPlay, onTutorial, onMultiplayer) {
+    this.onPlay        = onPlay;
+    this.onTutorial    = onTutorial;
+    this.onMultiplayer = onMultiplayer;
     this._colorIdx    = 0;
     this._hat         = 'none';
     this._playerClass = 'brawler';
@@ -475,10 +480,7 @@ export class Menu {
           <div class="home-btn-group">
             <button class="home-btn primary" id="btn-solo">Solo</button>
 
-            <button class="home-btn disabled-btn" disabled>
-              Two Player
-              <span class="coming-soon">Coming Soon</span>
-            </button>
+            <button class="home-btn" id="btn-multiplayer">Multiplayer</button>
 
             <button class="home-btn" id="btn-tutorial">Tutorial</button>
           </div>
@@ -506,6 +508,12 @@ export class Menu {
       if (this.onTutorial) {
         this._overlay.remove();
         this.onTutorial();
+      }
+    });
+    this._overlay.querySelector('#btn-multiplayer')?.addEventListener('click', () => {
+      if (this.onMultiplayer) {
+        this._overlay.remove();
+        this.onMultiplayer();
       }
     });
     this._initPatchPanel();
@@ -695,6 +703,180 @@ export class Menu {
       hat:         this._hat,
       playerClass: this._playerClass,
       difficulty:  this._difficulty,
+    });
+  }
+
+  _showMultiplayer() {
+    if (!this._net) return;
+    this._overlay.innerHTML = `
+      <div class="menu-screen home-centre" style="gap:20px">
+        <div class="menu-title" style="font-size:22px">MULTIPLAYER</div>
+        <div class="home-btn-group">
+          <button class="home-btn primary" id="btn-quick-play">⚡ Quick Play</button>
+          <button class="home-btn" id="btn-create-room">🏠 Create Room</button>
+          <div style="display:flex;gap:8px;width:100%">
+            <input id="mp-code-input" placeholder="ROOM CODE" maxlength="5"
+              style="flex:1;background:#111a0e;border:1px solid #335522;border-radius:6px;
+              color:#ccffaa;font-family:'Press Start 2P',monospace;font-size:10px;padding:10px 12px;
+              text-transform:uppercase;outline:none" />
+            <button class="home-btn" id="btn-join-room" style="width:auto;padding:10px 16px">Join</button>
+          </div>
+          <button class="home-btn" id="btn-mp-back" style="background:transparent;border-color:#335522;color:#557744">← Back</button>
+        </div>
+        <div id="mp-error" style="font-family:'Press Start 2P',monospace;font-size:8px;color:#ff4444;display:none"></div>
+        <div id="mp-status" style="font-family:'Press Start 2P',monospace;font-size:8px;color:#88ff44;display:none"></div>
+      </div>
+    `;
+
+    const playerData = () => ({
+      playerClass: this._playerClass,
+      colour: PLAYER_COLORS[this._colorIdx]?.value ?? 0x7B3F00,
+      hat: this._hat,
+      name: 'Player',
+    });
+
+    this._overlay.querySelector('#btn-quick-play').addEventListener('click', () => {
+      this._net.quickPlay(playerData());
+      this._overlay.querySelector('#mp-status').textContent = 'Searching for players...';
+      this._overlay.querySelector('#mp-status').style.display = 'block';
+    });
+
+    this._overlay.querySelector('#btn-create-room').addEventListener('click', () => {
+      this._net.createRoom(playerData());
+    });
+
+    this._overlay.querySelector('#btn-join-room').addEventListener('click', () => {
+      const code = this._overlay.querySelector('#mp-code-input').value.trim().toUpperCase();
+      if (code.length !== 5) { this._overlay.querySelector('#mp-error').textContent = 'Enter a 5-letter code'; this._overlay.querySelector('#mp-error').style.display = 'block'; return; }
+      this._net.joinRoom(code, playerData());
+    });
+
+    this._overlay.querySelector('#btn-mp-back').addEventListener('click', () => this._showHome());
+  }
+
+  _showLobby(lobbyData) {
+    const me = lobbyData.players.find(p => p.socketId === this._net.mySocketId);
+    const isHost = me?.isHost;
+
+    this._overlay.innerHTML = `
+      <div class="menu-screen home-centre" style="gap:16px;max-width:520px;width:100%">
+        <div style="font-family:'Press Start 2P',monospace;font-size:9px;color:#557744">
+          Room: <span style="color:#88ff44">${lobbyData.id}</span>
+          &nbsp;·&nbsp; ${lobbyData.mode === 'coop' ? '🤝 Co-op' : '⚔️ PvP'}
+        </div>
+
+        <div id="lobby-player-list" style="display:flex;flex-direction:column;gap:8px;width:100%"></div>
+
+        <div id="lobby-customiser" style="display:none;width:100%"></div>
+
+        ${isHost ? `
+          <div style="display:flex;gap:8px;align-items:center">
+            <select id="lobby-mode" style="background:#111;color:#ccffaa;border:1px solid #335522;border-radius:6px;
+              font-family:'Press Start 2P',monospace;font-size:8px;padding:6px 10px">
+              <option value="coop" ${lobbyData.mode==='coop'?'selected':''}>Co-op</option>
+              <option value="pvp"  ${lobbyData.mode==='pvp' ?'selected':''}>PvP</option>
+            </select>
+            <select id="lobby-diff" style="background:#111;color:#ccffaa;border:1px solid #335522;border-radius:6px;
+              font-family:'Press Start 2P',monospace;font-size:8px;padding:6px 10px">
+              <option value="easy"   ${lobbyData.difficulty==='easy'  ?'selected':''}>Easy</option>
+              <option value="normal" ${lobbyData.difficulty==='normal'?'selected':''}>Normal</option>
+              <option value="hard"   ${lobbyData.difficulty==='hard'  ?'selected':''}>Hard</option>
+            </select>
+          </div>
+          <button class="home-btn primary" id="btn-lobby-start"
+            style="opacity:${lobbyData.players.length>=2 && lobbyData.players.every(p=>p.ready||p.isHost)?1:0.45}">
+            Start Game
+          </button>
+        ` : `
+          <button class="home-btn primary" id="btn-lobby-ready">
+            ${me?.ready ? '✓ Ready' : 'Ready Up'}
+          </button>
+        `}
+        <button class="home-btn" id="btn-lobby-leave" style="background:transparent;border-color:#335522;color:#557744">← Leave</button>
+      </div>
+    `;
+
+    // Render player rows
+    const renderPlayers = (players) => {
+      this._overlay.querySelector('#lobby-player-list').innerHTML = players.map(p => `
+        <div class="lobby-row${p.socketId === this._net.mySocketId ? ' mine' : ''}"
+             data-sid="${escLobbyHtml(p.socketId)}"
+             style="display:flex;align-items:center;gap:10px;background:rgba(0,0,0,0.6);
+             border:1px solid ${p.socketId===this._net.mySocketId?'#44cc44':'#335522'};
+             border-radius:8px;padding:8px 12px;cursor:${p.socketId===this._net.mySocketId?'pointer':'default'}">
+          <span style="font-size:18px">${{ brawler:'🥊', slinger:'🍌', trickster:'🎭' }[p.playerClass]||'🐒'}</span>
+          <div style="flex:1">
+            <div style="font-family:'Press Start 2P',monospace;font-size:8px;color:#ccffaa">
+              ${escLobbyHtml(p.name || 'Player')}${p.isHost?' 👑':''}
+            </div>
+            <div style="font-family:'Press Start 2P',monospace;font-size:7px;color:#557744">
+              ${escLobbyHtml(p.playerClass)} · ${escLobbyHtml(p.hat)}
+            </div>
+          </div>
+          <div style="font-family:'Press Start 2P',monospace;font-size:7px;color:${p.ready?'#44ff44':'#557744'}">
+            ${p.ready ? '✓ Ready' : 'waiting'}
+          </div>
+        </div>
+      `).join('');
+
+      // Click own row to open customiser
+      this._overlay.querySelectorAll('.lobby-row.mine').forEach(row => {
+        row.addEventListener('click', () => this._toggleLobbyCustomiser());
+      });
+    };
+
+    renderPlayers(lobbyData.players);
+
+    // Host controls
+    if (isHost) {
+      this._overlay.querySelector('#lobby-mode')?.addEventListener('change', e => this._net.setMode(e.target.value));
+      this._overlay.querySelector('#lobby-diff')?.addEventListener('change', e => this._net.setDifficulty(e.target.value));
+      this._overlay.querySelector('#btn-lobby-start')?.addEventListener('click', () => this._net.startGame());
+    } else {
+      this._overlay.querySelector('#btn-lobby-ready')?.addEventListener('click', () => {
+        this._net.setReady(!me?.ready);
+      });
+    }
+
+    this._overlay.querySelector('#btn-lobby-leave')?.addEventListener('click', () => {
+      this._net.onLobbyUpdate = null;
+      this._net.destroy();
+      this._net = null;
+      this._showHome();
+    });
+
+    // Update when lobby state changes
+    this._net.onLobbyUpdate = (data) => {
+      renderPlayers(data.players);
+      // Update start button
+      const canStart = data.players.length >= 2 && data.players.every(p => p.ready || p.isHost);
+      const startBtn = this._overlay.querySelector('#btn-lobby-start');
+      if (startBtn) startBtn.style.opacity = canStart ? '1' : '0.45';
+    };
+  }
+
+  _toggleLobbyCustomiser() {
+    const el = this._overlay.querySelector('#lobby-customiser');
+    if (!el) return;
+    if (el.style.display !== 'none') { el.style.display = 'none'; return; }
+    el.style.display = 'block';
+    el.innerHTML = `
+      <div style="background:rgba(0,0,0,0.5);border:1px solid #335522;border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:10px">
+        <div style="font-family:'Press Start 2P',monospace;font-size:8px;color:#88ff44">Your Class</div>
+        <div style="display:flex;gap:8px">
+          ${[{id:'brawler',emoji:'🥊'},{id:'slinger',emoji:'🍌'},{id:'trickster',emoji:'🎭'}].map(c=>`
+            <div class="go-class-card${this._playerClass===c.id?' selected':''}" data-id="${c.id}"
+              style="cursor:pointer">${c.emoji} ${c.id}</div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+    el.querySelectorAll('.go-class-card').forEach(card => {
+      card.addEventListener('click', () => {
+        this._playerClass = card.dataset.id;
+        this._net.updateCustomisation({ playerClass: this._playerClass });
+        this._toggleLobbyCustomiser();
+      });
     });
   }
 }

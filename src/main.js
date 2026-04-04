@@ -6,6 +6,10 @@ import { Menu, PLAYER_COLORS, HATS, PLAYER_CLASSES } from './menu.js';
 import { initDamageNumbers, updateDmgNums, setDmgNumColor } from './damage-numbers.js';
 import { openBestiary } from './bestiary.js';
 import { UPGRADES }     from './upgrades.js';
+import { NetworkManager }       from './network.js';
+import { MultiplayerRenderer }  from './multiplayer-renderer.js';
+import { MultiplayerHUD }       from './multiplayer-hud.js';
+import { generateOffers }       from './upgrades.js';
 
 initDamageNumbers(document.getElementById('dmg-layer'));
 
@@ -362,6 +366,13 @@ window.addEventListener('keydown', e => {
 const input = new InputManager();
 let game     = null;
 let tutorial = null;
+let net    = null;  // NetworkManager
+let mpRend = null;  // MultiplayerRenderer
+let mpHud  = null;  // MultiplayerHUD
+let mpMode = null;  // 'coop' | 'pvp'
+let _mpFloor = null;
+let _spectating = false;
+let _spectatorTarget = new THREE.Vector3(0, 0, 0);
 let last = performance.now();
 let lastConfig = null;
 
@@ -395,6 +406,45 @@ function startTutorial() {
     scene.add(sun);
     new Menu(cfg => startGame(cfg), () => startTutorial());
   };
+}
+
+function startMultiplayer(mode) {
+  mpMode = mode;
+  if (game)     { game.isOver = true; game = null; }
+  if (tutorial) { tutorial.isOver = true; tutorial = null; }
+  scene.clear();
+  scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+  scene.add(sun);
+  document.getElementById('hud').style.display = 'block';
+  if (scoreHudEl) scoreHudEl.style.display = 'none';
+  if (roomNumEl)  roomNumEl.style.display   = 'none';
+  if (bossHud)    bossHud.style.display     = 'none';
+
+  // Build arena floor
+  if (_mpFloor) { _mpFloor.geometry.dispose(); _mpFloor.material.dispose(); }
+  _mpFloor = new THREE.Mesh(
+    new THREE.PlaneGeometry(22, 18),
+    new THREE.MeshLambertMaterial({ color: 0x2a4a2a })
+  );
+  _mpFloor.rotation.x = -Math.PI / 2;
+  _mpFloor.receiveShadow = true;
+  scene.add(_mpFloor);
+
+  mpRend = new MultiplayerRenderer(scene, net.mySocketId);
+  mpHud  = new MultiplayerHUD(mode);
+}
+
+function stopMultiplayer() {
+  mpRend?.destroy(); mpRend = null;
+  mpHud?.destroy();  mpHud  = null;
+  mpMode = null;
+  if (_mpFloor) { _mpFloor.geometry.dispose(); _mpFloor.material.dispose(); _mpFloor = null; }
+  _spectating = false;
+  camera.position.set(0, 26, 1);
+  camera.lookAt(0, 0, 0);
+  document.getElementById('hud').style.display = 'none';
+  if (scoreHudEl) scoreHudEl.style.display = '';
+  if (roomNumEl)  roomNumEl.style.display  = '';
 }
 
 function startGame(config) {
@@ -470,6 +520,102 @@ document.getElementById('btn-go-exit')?.addEventListener('click', () => {
   new Menu(cfg => startGame(cfg), () => startTutorial());
 });
 
+// ── Multiplayer overlay helpers ───────────────────────────────────
+function _buildCoopShopOverlay(offers, sharedPool) {
+  const existing = document.getElementById('coop-shop-overlay');
+  if (existing) existing.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'coop-shop-overlay';
+  overlay.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,0.75);
+    display:flex;align-items:center;justify-content:center;z-index:40`;
+  overlay.innerHTML = `
+    <div style="background:#0b1608;border:2px solid #44cc22;border-radius:12px;padding:24px;max-width:500px;width:90%">
+      <div style="font-family:'Press Start 2P',monospace;font-size:12px;color:#88ff44;margin-bottom:6px">Shop</div>
+      <div style="font-family:'Press Start 2P',monospace;font-size:8px;color:#557744;margin-bottom:16px">
+        Shared Pool: 🍌 <span id="coop-pool">${sharedPool}</span>
+      </div>
+      <div id="coop-offers" style="display:flex;flex-direction:column;gap:8px"></div>
+      <button id="coop-shop-done" class="home-btn" style="margin-top:16px;width:100%">Continue →</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  const offerEl = overlay.querySelector('#coop-offers');
+  for (const u of offers) {
+    const btn = document.createElement('button');
+    btn.className = 'home-btn';
+    btn.style.cssText = 'width:100%;text-align:left;padding:10px 14px;font-size:8px';
+    btn.innerHTML = `${u.icon} ${u.label} <span style="color:#ffcc44">🍌${u.cost}</span> — ${u.desc}`;
+    btn.addEventListener('click', () => {
+      net.buyUpgrade(u.id);
+      if (net) net.onPoolUpdate = null;
+      overlay.remove();
+    });
+    offerEl.appendChild(btn);
+  }
+  overlay.querySelector('#coop-shop-done').addEventListener('click', () => {
+    if (net) net.onPoolUpdate = null;
+    overlay.remove();
+  });
+  net.onPoolUpdate = ({ sharedPool: p }) => {
+    const el = document.getElementById('coop-pool');
+    if (el) el.textContent = p;
+  };
+}
+
+function _buildPvpUpgradeOverlay(offers) {
+  document.getElementById('pvp-upgrade-overlay')?.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'pvp-upgrade-overlay';
+  overlay.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,0.8);
+    display:flex;align-items:center;justify-content:center;z-index:40`;
+  overlay.innerHTML = `
+    <div style="background:#0b1608;border:2px solid #ffcc44;border-radius:12px;padding:24px;max-width:480px;width:90%">
+      <div style="font-family:'Press Start 2P',monospace;font-size:11px;color:#ffcc44;margin-bottom:16px">🏆 Round Win! Choose Upgrade</div>
+      <div id="pvp-offers" style="display:flex;flex-direction:column;gap:8px"></div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  const offerEl = overlay.querySelector('#pvp-offers');
+  for (const u of offers) {
+    const btn = document.createElement('button');
+    btn.className = 'home-btn';
+    btn.style.cssText = 'width:100%;text-align:left;padding:10px 14px;font-size:8px';
+    btn.innerHTML = `${u.icon} ${u.label} — ${u.desc}`;
+    btn.addEventListener('click', () => { net.choosePvpUpgrade(u.id); overlay.remove(); });
+    offerEl.appendChild(btn);
+  }
+}
+
+function _showMatchEndScreen(winnerId, scores) {
+  stopMultiplayer();
+  const overlay = document.createElement('div');
+  overlay.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,0.85);
+    display:flex;align-items:center;justify-content:center;z-index:50`;
+  const winnerName = net?.gameState?.players?.find(p => p.socketId === winnerId)?.name || 'Player';
+  overlay.innerHTML = `
+    <div style="background:#0b1608;border:2px solid #ffcc44;border-radius:12px;padding:32px;text-align:center">
+      <div style="font-family:'Press Start 2P',monospace;font-size:16px;color:#ffcc44;margin-bottom:12px">🏆 Match Over!</div>
+      <div style="font-family:'Press Start 2P',monospace;font-size:10px;color:#88ff44;margin-bottom:24px">
+        ${winnerId === net?.mySocketId ? 'You win!' : (winnerName + ' wins!')}
+      </div>
+      <div style="display:flex;gap:12px;justify-content:center">
+        <button class="home-btn primary" id="btn-rematch">Rematch</button>
+        <button class="home-btn" id="btn-back-menu">Main Menu</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  overlay.querySelector('#btn-rematch').addEventListener('click', () => {
+    overlay.remove();
+    net?.startGame();
+  });
+  overlay.querySelector('#btn-back-menu').addEventListener('click', () => {
+    overlay.remove();
+    net?.destroy(); net = null;
+    new Menu(cfg => startGame(cfg), () => startTutorial(), () => {});
+  });
+}
+
 // ── Render loop ───────────────────────────────────────────────────
 function loop() {
   requestAnimationFrame(loop);
@@ -500,6 +646,39 @@ function loop() {
     if (epicIndicator) epicIndicator.style.display = 'none';
 
     updateDmgNums(dt, camera);
+    renderer.render(scene, camera);
+    return;
+  }
+
+  if (net && mpRend) {
+    const state = net.gameState;
+    if (state) {
+      mpRend.applyState(state);
+      mpHud.update(state, net.mySocketId);
+      // Update local player HP bar from server state
+      const me = mpRend.getMyState(state);
+      if (me && hpFill) hpFill.style.width = ((me.hp / (me.maxHp || 100)) * 100).toFixed(1) + '%';
+    }
+    // Send inputs every frame
+    const keys = [];
+    ['KeyW','KeyS','KeyA','KeyD'].forEach(k => { if (input.isDown(k)) keys.push(k); });
+    // Calculate mouse angle relative to center of screen
+    const mouseAngle = Math.atan2(mouseNDC.x, -mouseNDC.y);
+    net.sendInput({
+      keys,
+      mouseAngle,
+      lmb:   input.isMouseDown(0),
+      shift: input.isDown('ShiftLeft') || input.isDown('ShiftRight'),
+      space: input.isDown('Space'),
+    });
+    updateDmgNums(dt, camera);
+    if (_spectating && mouseNDC) {
+      _spectatorTarget.x = THREE.MathUtils.lerp(_spectatorTarget.x, mouseNDC.x * 8, 0.04);
+      _spectatorTarget.z = THREE.MathUtils.lerp(_spectatorTarget.z, mouseNDC.y * -6, 0.04);
+      camera.position.x  = THREE.MathUtils.lerp(camera.position.x, _spectatorTarget.x, 0.1);
+      camera.position.z  = THREE.MathUtils.lerp(camera.position.z, _spectatorTarget.z + 1, 0.1);
+      camera.lookAt(_spectatorTarget.x, 0, _spectatorTarget.z);
+    }
     renderer.render(scene, camera);
     return;
   }
@@ -586,8 +765,73 @@ function loop() {
 loop();
 
 // ── Menu ──────────────────────────────────────────────────────────
-new Menu((config) => {
-  startGame(config);
-}, () => {
-  startTutorial();
-});
+new Menu(
+  (config) => startGame(config),
+  () => startTutorial(),
+  () => {
+    net = new NetworkManager();
+
+    net.onGameStarting = ({ mode }) => {
+      startMultiplayer(mode);
+    };
+
+    net.onOpenShop = ({ sharedPool }) => {
+      const me = net.gameState?.players?.find(p => p.socketId === net.mySocketId);
+      const cls = me?.playerClass || 'brawler';
+      const offers = generateOffers(sharedPool, 1, cls, false, false, []);
+      _buildCoopShopOverlay(offers, sharedPool);
+    };
+
+    net.onGameOver = () => {
+      stopMultiplayer();
+      const gameOverEl = document.getElementById('game-over');
+      if (gameOverEl) gameOverEl.style.display = 'flex';
+    };
+
+    net.onMatchEnd = ({ winnerId, scores }) => {
+      _showMatchEndScreen(winnerId, scores);
+    };
+
+    net.onOpenPvpUpgrade = () => {
+      const me = net.gameState?.players?.find(p => p.socketId === net.mySocketId);
+      const cls = me?.playerClass || 'brawler';
+      const offers = generateOffers(99, 1, cls, false, false, []);
+      _buildPvpUpgradeOverlay(offers.slice(0, 3));
+    };
+
+    net.onRoundEnd = ({ winnerId, scores }) => {
+      const state = net.gameState;
+      const me = state?.players?.find(p => p.socketId === net.mySocketId);
+      _spectating = me != null && !me.isAlive;
+    };
+
+    net.onRoundStart = () => {
+      _spectating = false;
+    };
+
+    net.onConnectError = (err) => {
+      console.error('Multiplayer connection error:', err);
+    };
+
+    // Show multiplayer screen via menu
+    const m = new Menu(
+      (config) => startGame(config),
+      () => startTutorial(),
+      null
+    );
+    m._net = net;
+    m._showMultiplayer();
+    m._net.onRoomJoined = ({ code }) => {
+      m._showLobby({ id: code, mode: 'coop', difficulty: 'normal', players: [] });
+    };
+    m._net.onLobbyUpdate = (data) => m._showLobby(data);
+    m._net.onJoinError = (msg) => {
+      const errEl = m._overlay?.querySelector('#mp-error');
+      if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; }
+    };
+    m._net.onQueueWaiting = () => {
+      const statusEl = m._overlay?.querySelector('#mp-status');
+      if (statusEl) { statusEl.textContent = 'Searching for players...'; statusEl.style.display = 'block'; }
+    };
+  }
+);
