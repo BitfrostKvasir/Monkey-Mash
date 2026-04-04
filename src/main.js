@@ -371,6 +371,8 @@ let mpRend = null;  // MultiplayerRenderer
 let mpHud  = null;  // MultiplayerHUD
 let mpMode = null;  // 'coop' | 'pvp'
 let _mpFloor = null;
+let _spectating = false;
+let _spectatorTarget = new THREE.Vector3(0, 0, 0);
 let last = performance.now();
 let lastConfig = null;
 
@@ -667,6 +669,13 @@ function loop() {
       space: input.isDown('Space'),
     });
     updateDmgNums(dt, camera);
+    if (_spectating && mouseNDC) {
+      _spectatorTarget.x = THREE.MathUtils.lerp(_spectatorTarget.x, mouseNDC.x * 8, 0.04);
+      _spectatorTarget.z = THREE.MathUtils.lerp(_spectatorTarget.z, mouseNDC.y * -6, 0.04);
+      camera.position.x  = THREE.MathUtils.lerp(camera.position.x, _spectatorTarget.x, 0.1);
+      camera.position.z  = THREE.MathUtils.lerp(camera.position.z, _spectatorTarget.z + 1, 0.1);
+      camera.lookAt(_spectatorTarget.x, 0, _spectatorTarget.z);
+    }
     renderer.render(scene, camera);
     return;
   }
@@ -785,6 +794,16 @@ new Menu(
       const cls = me?.playerClass || 'brawler';
       const offers = generateOffers(99, 1, cls, false, false, []);
       _buildPvpUpgradeOverlay(offers.slice(0, 3));
+    };
+
+    net.onRoundEnd = ({ winnerId, scores }) => {
+      const state = net.gameState;
+      const me = state?.players?.find(p => p.socketId === net.mySocketId);
+      _spectating = me != null && !me.isAlive;
+    };
+
+    net.onRoundStart = () => {
+      _spectating = false;
     };
 
     net.onConnectError = (err) => {
