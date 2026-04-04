@@ -29,6 +29,8 @@ export class NetworkManager {
     this.onPlayerLeave    = null;
     this.onConnectError   = null;
     this.onKicked         = null;
+    this.onGamePaused     = null;
+    this.onGameResumed    = null;
 
     this.socket.on('connect', () => { this.mySocketId = this.socket.id; });
     this.socket.on('lobby-update',    d => this.onLobbyUpdate?.(d));
@@ -51,6 +53,8 @@ export class NetworkManager {
     this.socket.on('player-leave',    d => this.onPlayerLeave?.(d));
     this.socket.on('connect_error',   e => this.onConnectError?.(e));
     this.socket.on('kicked',          () => this.onKicked?.());
+    this.socket.on('game-paused',     d  => this.onGamePaused?.(d));
+    this.socket.on('game-resumed',    () => this.onGameResumed?.());
   }
 
   // Lobby
@@ -69,6 +73,8 @@ export class NetworkManager {
   buyUpgrade(upgradeId)           { this.socket.emit('buy-upgrade', { upgradeId }); }
   choosePvpUpgrade(upgradeId)     { this.socket.emit('pvp-upgrade-chosen', { upgradeId }); }
   kickPlayer(targetSocketId)      { this.socket.emit('kick-player', { targetSocketId }); }
+  pauseGame()                     { this.socket.emit('pause-game'); }
+  resumeGame()                    { this.socket.emit('resume-game'); }
 
   destroy() { this.socket.disconnect(); }
 }

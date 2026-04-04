@@ -29,6 +29,19 @@ export class ServerGame {
     this._tickInterval = null;
     this._bananaId    = 1;
     this._inputs      = {};
+    this.pausedBy     = null; // socketId of who paused, or null
+  }
+
+  pause(socketId) {
+    if (this.pausedBy) return; // already paused
+    this.pausedBy = socketId;
+    this.io.to(this.room.id).emit('game-paused', { by: socketId });
+  }
+
+  resume(socketId) {
+    if (this.pausedBy !== socketId) return; // only pauser can resume
+    this.pausedBy = null;
+    this.io.to(this.room.id).emit('game-resumed');
   }
 
   start() {
@@ -73,6 +86,7 @@ export class ServerGame {
   }
 
   _tick() {
+    if (this.pausedBy) return; // freeze everything while paused
     const dt = TICK_MS / 1000;
 
     if (this.phase === 'fight') {

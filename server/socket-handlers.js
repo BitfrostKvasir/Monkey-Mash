@@ -178,6 +178,18 @@ export function handleSocket(io, socket) {
     room.game.chooseUpgrade(socket.id, upgradeId);
   });
 
+  socket.on('pause-game', () => {
+    const room = getRoomBySocket(socket.id);
+    if (!room?.game?.pause) return;
+    room.game.pause(socket.id);
+  });
+
+  socket.on('resume-game', () => {
+    const room = getRoomBySocket(socket.id);
+    if (!room?.game?.resume) return;
+    room.game.resume(socket.id);
+  });
+
   // ── Disconnect ────────────────────────────────────────────────
 
   socket.on('disconnect', () => {

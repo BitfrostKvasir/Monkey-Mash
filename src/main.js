@@ -210,7 +210,18 @@ function togglePause() {
   if (game.isPaused) closePause(); else openPause();
 }
 
-btnPause?.addEventListener('click', togglePause);
+btnPause?.addEventListener('click', () => {
+  if (net && mpRend) {
+    // Multiplayer pause: send to server
+    if (_mpIsPaused && _mpPausedBy === net.mySocketId) {
+      net.resumeGame();
+    } else if (!_mpIsPaused) {
+      net.pauseGame();
+    }
+  } else {
+    togglePause();
+  }
+});
 btnResume?.addEventListener('click', closePause);
 document.getElementById('btn-bestiary')?.addEventListener('click', openBestiary);
 document.getElementById('btn-exit-to-menu')?.addEventListener('click', () => {
@@ -373,6 +384,8 @@ let mpHud  = null;  // MultiplayerHUD
 let mpMode = null;  // 'coop' | 'pvp'
 let _mpArena = null; // arena visuals disposer
 let _mpLastPhase = null; // track phase transitions for room-clear flash
+let _mpIsPaused = false;
+let _mpPausedBy = null;
 let _spectating = false;
 let _spectatorTarget = new THREE.Vector3(0, 0, 0);
 let last = performance.now();
@@ -449,6 +462,8 @@ function stopMultiplayer() {
   mpMode = null;
   _mpArena?.dispose(); _mpArena = null;
   _mpLastPhase = null;
+  _mpIsPaused = false; _mpPausedBy = null;
+  document.getElementById('mp-pause-overlay')?.remove();
   _spectating = false;
   camera.position.set(0, 26, 1);
   camera.lookAt(0, 0, 0);
@@ -759,6 +774,8 @@ function loop() {
         _mpLastPhase = state.phase;
       }
     }
+    // Don't send inputs while paused
+    if (_mpIsPaused) { renderer.render(scene, camera); return; }
     // Send inputs every frame
     const keys = [];
     ['KeyW','KeyS','KeyA','KeyD'].forEach(k => { if (input.isDown(k)) keys.push(k); });
@@ -983,6 +1000,40 @@ new Menu(
       document.getElementById('pvp-waiting-overlay')?.remove();
       document.getElementById('pvp-upgrade-overlay')?.remove();
       _showRoundOverlay(`ROUND ${round}`, '', 1800);
+    };
+
+    net.onGamePaused = ({ by }) => {
+      _mpIsPaused = true;
+      _mpPausedBy = by;
+      const isMe = by === net.mySocketId;
+      const pauserName = net.gameState?.players?.find(p => p.socketId === by)?.name || 'A player';
+      document.getElementById('mp-pause-overlay')?.remove();
+      const el = document.createElement('div');
+      el.id = 'mp-pause-overlay';
+      el.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,0.75);
+        display:flex;flex-direction:column;align-items:center;justify-content:center;
+        gap:20px;z-index:60;`;
+      el.innerHTML = `
+        <div style="font-family:'Press Start 2P',monospace;font-size:20px;color:#ffcc44">⏸ PAUSED</div>
+        <div style="font-family:'Press Start 2P',monospace;font-size:9px;color:#aaaaaa">
+          ${isMe ? 'You paused the game' : `${pauserName} paused the game`}
+        </div>
+        ${isMe
+          ? `<button id="mp-resume-btn" class="home-btn primary" style="margin-top:8px">▶ Resume</button>`
+          : `<div style="font-family:'Press Start 2P',monospace;font-size:8px;color:#556655">
+              Only ${pauserName} can resume
+            </div>`}
+      `;
+      document.body.appendChild(el);
+      if (isMe) {
+        document.getElementById('mp-resume-btn')?.addEventListener('click', () => net.resumeGame());
+      }
+    };
+
+    net.onGameResumed = () => {
+      _mpIsPaused = false;
+      _mpPausedBy = null;
+      document.getElementById('mp-pause-overlay')?.remove();
     };
 
     net.onConnectError = (err) => {

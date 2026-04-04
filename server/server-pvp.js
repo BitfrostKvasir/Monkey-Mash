@@ -24,10 +24,23 @@ export class PvPGame {
     this._pendingUpgradeChoices = {};
     this._lastRoundWinner = null;
     this._pickups = [];
+    this.pausedBy = null;
 
     room.players.forEach(pd => {
       this.scores[pd.socketId] = 0;
     });
+  }
+
+  pause(socketId) {
+    if (this.pausedBy) return;
+    this.pausedBy = socketId;
+    this.io.to(this.room.id).emit('game-paused', { by: socketId });
+  }
+
+  resume(socketId) {
+    if (this.pausedBy !== socketId) return;
+    this.pausedBy = null;
+    this.io.to(this.room.id).emit('game-resumed');
   }
 
   start() {
@@ -82,6 +95,7 @@ export class PvPGame {
   }
 
   _tick() {
+    if (this.pausedBy) return;
     const dt = TICK_MS / 1000;
 
     if (this.phase === 'round') {
