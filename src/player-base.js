@@ -91,7 +91,7 @@ export class BasePlayer {
     });
     this._dashRingMesh = new THREE.Mesh(dashRingGeo, this._dashRingMat);
     this._dashRingMesh.rotation.x = -Math.PI / 2;
-    this._dashRingMesh.position.y = 3.2;
+    this._dashRingMesh.position.y = 3.0;
     this.mesh.add(this._dashRingMesh);
   }
 
