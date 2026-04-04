@@ -31,11 +31,12 @@ export class Game {
     const { color = 0x7B3F00, hat = 'none' } = config;
     this._playerClass = config.playerClass || 'brawler';
     const diffMults = { easy: 0.65, normal: 1.0, hard: 1.45 };
-    this._enemyHpMult = diffMults[config.difficulty] ?? 1.0;
+    this._difficulty  = config.difficulty || 'normal';
+    this._enemyHpMult = diffMults[this._difficulty] ?? 1.0;
 
     const cls = { brawler: BrawlerPlayer, slinger: SlingerPlayer, trickster: TricksterPlayer }[this._playerClass] || BrawlerPlayer;
     this.player  = new cls(scene, input, color, hat);
-    this.room    = new Room(scene, this._roomNumber, { enemyHpMult: this._enemyHpMult });
+    this.room    = new Room(scene, this._roomNumber, { enemyHpMult: this._enemyHpMult, difficulty: this._difficulty });
     this.pickups = [];
     this._shop   = new Shop();
 
@@ -290,7 +291,7 @@ export class Game {
     if (this.player.cleanup) this.player.cleanup();
     this.room.destroy();
     this._roomNumber++;
-    this.room = new Room(this.scene, this._roomNumber, { enemyHpMult: this._enemyHpMult });
+    this.room = new Room(this.scene, this._roomNumber, { enemyHpMult: this._enemyHpMult, difficulty: this._difficulty });
 
     this.player.mesh.position.set(0, 0, 0);
     this.player.velocity.set(0, 0, 0);
@@ -328,7 +329,7 @@ export class Game {
     if (this.player.cleanup) this.player.cleanup();
     this.room.destroy();
     this._roomNumber = Math.max(1, this._roomNumber - 1);
-    this.room = new Room(this.scene, this._roomNumber, { enemyHpMult: this._enemyHpMult });
+    this.room = new Room(this.scene, this._roomNumber, { enemyHpMult: this._enemyHpMult, difficulty: this._difficulty });
     this.player.mesh.position.set(0, 0, 0);
     this.player.velocity.set(0, 0, 0);
     this._phase = 'fight';

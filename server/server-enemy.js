@@ -67,14 +67,20 @@ export class ServerEnemy {
   }
 }
 
+// Multiplayer is inherently harder — slightly higher base HP
+const MP_BASE_MULT = 1.2;
+
 export function spawnWave(roomNumber, playerCount, difficulty) {
-  const hpMults = { easy: 0.65, normal: 1.0, hard: 1.45 };
+  // easy: no exponent, normal: 1.12/room, hard: 1.20/room (same as solo)
+  const expFactors = { easy: 1.0, normal: 1.12, hard: 1.20 };
+  const hpMults    = { easy: 0.65, normal: 1.0, hard: 1.45 };
   const excessRooms = Math.max(0, roomNumber - 20);
   const hpMult = (hpMults[difficulty] ?? 1.0)
+    * MP_BASE_MULT
     * (1 + (roomNumber - 1) * 0.25)
-    * Math.pow(1.12, excessRooms)
+    * Math.pow(expFactors[difficulty] ?? 1.12, excessRooms)
     * (1 + (playerCount - 1) * 0.3);
-  const speedMult = 1 + excessRooms * 0.04;
+  const speedMult = difficulty === 'easy' ? 1 : 1 + excessRooms * 0.04;
   const count = Math.min(3 + roomNumber + playerCount + excessRooms, 16);
   const types = ['grunt', 'bandit', 'bomber', 'howler'];
   const enemies = [];

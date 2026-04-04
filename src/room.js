@@ -14,7 +14,7 @@ const WALL_H = 2.5;
 const WALL_T = 0.6;
 
 export class Room {
-  constructor(scene, roomNumber = 1, { enemyHpMult = 1 } = {}) {
+  constructor(scene, roomNumber = 1, { enemyHpMult = 1, difficulty = 'normal' } = {}) {
     this.scene     = scene;
     this.enemies   = [];
     this._meshes   = [];
@@ -22,6 +22,7 @@ export class Room {
     this.boss      = null;
     this.isBossRoom = (roomNumber === 8 || roomNumber === 16);
     this._enemyHpMult = enemyHpMult;
+    this._difficulty  = difficulty;
 
     this._buildForest();
     this._buildFloor();
@@ -160,10 +161,12 @@ export class Room {
       return;
     }
 
-    // Linear scaling up to room 20; exponential beyond that
+    // Linear scaling up to room 20; difficulty-dependent exponential beyond that
+    // easy: no exponent (stays linear), normal: 1.12/room, hard: 1.20/room
+    const expFactor = { easy: 1.0, normal: 1.12, hard: 1.20 }[this._difficulty] ?? 1.12;
     const excessRooms = Math.max(0, roomNumber - 20);
-    const hpScale = (1 + (roomNumber - 1) * 0.25) * Math.pow(1.12, excessRooms);
-    const speedScale = 1 + excessRooms * 0.04; // +4% speed per room past 20
+    const hpScale = (1 + (roomNumber - 1) * 0.25) * Math.pow(expFactor, excessRooms);
+    const speedScale = this._difficulty === 'easy' ? 1 : 1 + excessRooms * 0.04;
 
     const count = Math.min(3 + Math.floor(roomNumber * 1.2) + excessRooms, 18);
     const hw = ROOM_W / 2 - 2;
