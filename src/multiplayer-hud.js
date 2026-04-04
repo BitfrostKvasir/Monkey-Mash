@@ -1,4 +1,8 @@
 // src/multiplayer-hud.js
+function escHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 export class MultiplayerHUD {
   constructor(mode) {
     this.mode = mode; // 'coop' | 'pvp'
@@ -46,7 +50,7 @@ export class MultiplayerHUD {
           <span style="font-size:14px">${{ brawler:'🥊', slinger:'🍌', trickster:'🎭' }[p.playerClass] || '🐒'}</span>
           <div style="flex:1">
             <div style="font-family:'Press Start 2P',monospace;font-size:7px;color:${col};margin-bottom:2px">
-              ${isMe ? 'YOU' : p.name || 'Player'}${p.isDown ? ' 💀' : ''}
+              ${isMe ? 'YOU' : escHtml(p.name || 'Player')}${p.isDown ? ' 💀' : ''}
             </div>
             <div style="background:#333;border-radius:3px;height:5px;width:100px">
               <div style="background:${hpPct > 50 ? '#44cc44' : hpPct > 25 ? '#ffcc00' : '#ff4444'};
