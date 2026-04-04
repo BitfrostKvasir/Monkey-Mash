@@ -338,6 +338,94 @@ export class Room {
 }
 
 /**
+ * Build a PvP battle arena — dark stone pit with pillars and a center ring.
+ * Returns a dispose() function to clean up all meshes.
+ */
+export function buildPvPArena(scene) {
+  const meshes = [];
+  const add = (geo, mat, x = 0, y = 0, z = 0, rx = 0) => {
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(x, y, z);
+    if (rx) m.rotation.x = rx;
+    m.receiveShadow = true;
+    m.castShadow = true;
+    scene.add(m);
+    meshes.push(m);
+    return m;
+  };
+
+  // Extended dark ground
+  add(new THREE.PlaneGeometry(80, 80),
+    new THREE.MeshLambertMaterial({ color: 0x0a0a0a }), 0, -0.02, 0, -Math.PI / 2);
+
+  // Stone floor (lighter grey tiles)
+  add(new THREE.PlaneGeometry(ROOM_W, ROOM_H),
+    new THREE.MeshLambertMaterial({ color: 0x2a2a2a }), 0, 0, 0, -Math.PI / 2);
+
+  // Floor grid lines
+  const pts = [];
+  const CELL = 2;
+  for (let i = 0; i <= ROOM_W / CELL; i++) {
+    const x = -ROOM_W / 2 + i * CELL;
+    pts.push(x, 0.01, -ROOM_H / 2, x, 0.01, ROOM_H / 2);
+  }
+  for (let j = 0; j <= ROOM_H / CELL; j++) {
+    const z = -ROOM_H / 2 + j * CELL;
+    pts.push(-ROOM_W / 2, 0.01, z, ROOM_W / 2, 0.01, z);
+  }
+  const gridGeo = new THREE.BufferGeometry();
+  gridGeo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+  const grid = new THREE.LineSegments(gridGeo, new THREE.LineBasicMaterial({ color: 0x3a3a3a }));
+  scene.add(grid);
+  meshes.push(grid);
+
+  // Center battle ring (glowing circle outline on floor)
+  const ringGeo = new THREE.RingGeometry(3.8, 4.0, 48);
+  const ringMat = new THREE.MeshBasicMaterial({ color: 0xcc4400, side: THREE.DoubleSide });
+  const ring = new THREE.Mesh(ringGeo, ringMat);
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.02;
+  scene.add(ring);
+  meshes.push(ring);
+
+  // Stone walls (dark brick)
+  const wallMat = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
+  const WALL_H = 2.5, WALL_T = 0.6;
+  const hw = ROOM_W / 2, hh = ROOM_H / 2;
+  const walls = [
+    [ROOM_W + WALL_T * 2, WALL_H, WALL_T, 0, WALL_H / 2, -hh],
+    [ROOM_W + WALL_T * 2, WALL_H, WALL_T, 0, WALL_H / 2,  hh],
+    [WALL_T, WALL_H, ROOM_H, -hw, WALL_H / 2, 0],
+    [WALL_T, WALL_H, ROOM_H,  hw, WALL_H / 2, 0],
+  ];
+  for (const [w, h, d, x, y, z] of walls) {
+    add(new THREE.BoxGeometry(w, h, d), wallMat, x, y, z);
+  }
+
+  // Corner pillars (dark stone columns)
+  const pillarMat = new THREE.MeshLambertMaterial({ color: 0x111111 });
+  for (const [px, pz] of [[-hw+0.3, -hh+0.3],[hw-0.3,-hh+0.3],[-hw+0.3,hh-0.3],[hw-0.3,hh-0.3]]) {
+    add(new THREE.BoxGeometry(1.2, 3.5, 1.2), pillarMat, px, 1.75, pz);
+  }
+
+  // Torch-like accent lights on walls (emissive orange boxes)
+  const torchMat = new THREE.MeshBasicMaterial({ color: 0xff6600 });
+  for (const [tx, tz] of [[-6,-hh+0.35],[0,-hh+0.35],[6,-hh+0.35],[-6,hh-0.35],[0,hh-0.35],[6,hh-0.35]]) {
+    const torch = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.35, 0.18), torchMat);
+    torch.position.set(tx, 1.5, tz);
+    scene.add(torch);
+    meshes.push(torch);
+  }
+
+  return {
+    dispose() {
+      for (const m of meshes) scene.remove(m);
+      meshes.length = 0;
+    },
+  };
+}
+
+/**
  * Build the arena visuals (floor, walls, forest) without spawning enemies.
  * Returns a dispose() function to clean up all meshes.
  */

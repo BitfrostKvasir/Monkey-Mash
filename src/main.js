@@ -10,7 +10,7 @@ import { NetworkManager }       from './network.js';
 import { MultiplayerRenderer }  from './multiplayer-renderer.js';
 import { MultiplayerHUD }       from './multiplayer-hud.js';
 import { generateOffers }       from './upgrades.js';
-import { buildArenaVisuals }    from './room.js';
+import { buildArenaVisuals, buildPvPArena } from './room.js';
 
 initDamageNumbers(document.getElementById('dmg-layer'));
 
@@ -419,14 +419,25 @@ function startMultiplayer(mode) {
   scene.add(sun);
   document.getElementById('hud').style.display = 'block';
   if (scoreHudEl) scoreHudEl.style.display = 'none';
-  if (roomNumEl)  { roomNumEl.style.display = ''; roomNumEl.textContent = 'Room 1'; }
   if (bossHud)    bossHud.style.display     = 'none';
   if (roomClearEl) roomClearEl.style.opacity = '0';
-  _mpLastPhase = 'fight';
 
-  // Build arena with proper walls, floor, and forest
-  _mpArena?.dispose();
-  _mpArena = buildArenaVisuals(scene);
+  if (mode === 'pvp') {
+    // PvP: hide solo HP bar (replaced by fighting-game bars in MultiplayerHUD)
+    const hpBar = document.getElementById('hp-bar');
+    if (hpBar) hpBar.style.display = 'none';
+    if (roomNumEl) roomNumEl.style.display = 'none';
+    _mpLastPhase = 'round';
+    _mpArena?.dispose();
+    _mpArena = buildPvPArena(scene);
+  } else {
+    const hpBar = document.getElementById('hp-bar');
+    if (hpBar) hpBar.style.display = '';
+    if (roomNumEl) { roomNumEl.style.display = ''; roomNumEl.textContent = 'Room 1'; }
+    _mpLastPhase = 'fight';
+    _mpArena?.dispose();
+    _mpArena = buildArenaVisuals(scene);
+  }
 
   mpRend = new MultiplayerRenderer(scene, net.mySocketId);
   mpHud  = new MultiplayerHUD(mode);
@@ -442,8 +453,12 @@ function stopMultiplayer() {
   camera.position.set(0, 26, 1);
   camera.lookAt(0, 0, 0);
   document.getElementById('hud').style.display = 'none';
+  const hpBar = document.getElementById('hp-bar');
+  if (hpBar) hpBar.style.display = '';
   if (scoreHudEl) scoreHudEl.style.display = '';
   if (roomNumEl)  roomNumEl.style.display  = '';
+  document.getElementById('round-overlay')?.remove();
+  document.getElementById('pvp-upgrade-overlay')?.remove();
 }
 
 function startGame(config) {
@@ -849,6 +864,30 @@ function loop() {
 
 loop();
 
+// ── PvP round overlay ─────────────────────────────────────────────
+function _showRoundOverlay(title, sub, ms = 2000) {
+  document.getElementById('round-overlay')?.remove();
+  const el = document.createElement('div');
+  el.id = 'round-overlay';
+  el.style.cssText = `
+    position:fixed;inset:0;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;z-index:45;pointer-events:none;
+    background:rgba(0,0,0,0.45);
+  `;
+  el.innerHTML = `
+    <div style="font-family:'Press Start 2P',monospace;font-size:22px;color:#ffcc44;
+      text-shadow:0 0 24px rgba(255,200,0,0.7);
+      animation:pvp-round-pop 0.25s cubic-bezier(.2,1.4,.4,1) both">
+      ${title}
+    </div>
+    ${sub ? `<div style="font-family:'Press Start 2P',monospace;font-size:9px;
+      color:#88ff44;margin-top:14px;opacity:0.85">${sub}</div>` : ''}
+  `;
+  document.body.appendChild(el);
+  if (ms > 0) setTimeout(() => { el.style.transition = 'opacity 0.3s'; el.style.opacity = '0';
+    setTimeout(() => el.remove(), 320); }, ms - 320);
+}
+
 // ── Menu ──────────────────────────────────────────────────────────
 new Menu(
   (config) => startGame(config),
@@ -885,20 +924,52 @@ new Menu(
     };
 
     net.onOpenPvpUpgrade = () => {
+      document.getElementById('pvp-waiting-overlay')?.remove();
       const me = net.gameState?.players?.find(p => p.socketId === net.mySocketId);
       const cls = me?.playerClass || 'brawler';
       const offers = generateOffers(99, 1, cls, false, false, []);
       _buildPvpUpgradeOverlay(offers.slice(0, 3));
     };
 
+    net.onWaitingUpgrade = ({ scores }) => {
+      document.getElementById('pvp-upgrade-overlay')?.remove();
+      const el = document.createElement('div');
+      el.id = 'pvp-waiting-overlay';
+      el.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,0.7);
+        display:flex;align-items:center;justify-content:center;z-index:40;pointer-events:none`;
+      el.innerHTML = `
+        <div style="font-family:'Press Start 2P',monospace;font-size:11px;color:#aaaaaa;
+          background:rgba(0,0,0,0.85);border:1px solid #444;border-radius:10px;padding:24px 32px;text-align:center">
+          ⏳ Opponent is choosing an upgrade...
+        </div>
+      `;
+      document.body.appendChild(el);
+    };
+
     net.onRoundEnd = ({ winnerId, scores }) => {
+      document.getElementById('pvp-waiting-overlay')?.remove();
       const state = net.gameState;
       const me = state?.players?.find(p => p.socketId === net.mySocketId);
       _spectating = me != null && !me.isAlive;
+      // Round result overlay
+      let title, sub = '';
+      if (!winnerId) {
+        title = 'DRAW!';
+      } else if (winnerId === net.mySocketId) {
+        title = 'YOU WIN!';
+        sub = 'Round complete';
+      } else {
+        const name = state?.players?.find(p => p.socketId === winnerId)?.name || 'Opponent';
+        title = `${name} WINS!`;
+      }
+      _showRoundOverlay(title, sub, 2500);
     };
 
-    net.onRoundStart = () => {
+    net.onRoundStart = ({ round, scores }) => {
       _spectating = false;
+      document.getElementById('pvp-waiting-overlay')?.remove();
+      document.getElementById('pvp-upgrade-overlay')?.remove();
+      _showRoundOverlay(`ROUND ${round}`, '', 1800);
     };
 
     net.onConnectError = (err) => {
