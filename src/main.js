@@ -586,6 +586,62 @@ function _buildPvpUpgradeOverlay(offers) {
   }
 }
 
+function _showGameLoadingOverlay(mode) {
+  const existing = document.getElementById('mp-loading-overlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'mp-loading-overlay';
+  overlay.style.cssText = `
+    position:fixed;inset:0;background:rgba(5,15,5,0.96);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:20px;z-index:100;
+  `;
+  overlay.innerHTML = `
+    <div style="font-family:'Press Start 2P',monospace;font-size:18px;color:#88ff44;letter-spacing:2px">
+      ${mode === 'pvp' ? '⚔️ PvP' : '🤝 Co-op'}
+    </div>
+    <div style="font-family:'Press Start 2P',monospace;font-size:9px;color:#557744">
+      Loading game...
+    </div>
+    <div style="width:280px;background:#111;border:1px solid #335522;border-radius:6px;height:14px;overflow:hidden">
+      <div id="mp-load-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#226611,#44cc22);
+        border-radius:6px;transition:width 0.25s ease"></div>
+    </div>
+    <div id="mp-load-label" style="font-family:'Press Start 2P',monospace;font-size:7px;color:#335522">
+      Connecting to server...
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  // Animate bar to 85% while waiting for first game state
+  let pct = 0;
+  const bar = overlay.querySelector('#mp-load-bar');
+  const label = overlay.querySelector('#mp-load-label');
+  const steps = [
+    { to: 30, delay: 100,  text: 'Syncing players...' },
+    { to: 60, delay: 400,  text: 'Building arena...' },
+    { to: 85, delay: 800,  text: 'Starting game...' },
+  ];
+  steps.forEach(({ to, delay, text }) => {
+    setTimeout(() => {
+      if (!document.getElementById('mp-loading-overlay')) return;
+      bar.style.width = to + '%';
+      label.textContent = text;
+    }, delay);
+  });
+}
+
+function _hideGameLoadingOverlay() {
+  const overlay = document.getElementById('mp-loading-overlay');
+  if (!overlay) return;
+  const bar = overlay.querySelector('#mp-load-bar');
+  const label = overlay.querySelector('#mp-load-label');
+  if (bar) bar.style.width = '100%';
+  if (label) label.textContent = 'Ready!';
+  setTimeout(() => overlay.remove(), 350);
+}
+
 function _showMatchEndScreen(winnerId, scores) {
   stopMultiplayer();
   const overlay = document.createElement('div');
@@ -772,7 +828,13 @@ new Menu(
     net = new NetworkManager();
 
     net.onGameStarting = ({ mode }) => {
+      _showGameLoadingOverlay(mode);
       startMultiplayer(mode);
+      // Dismiss overlay on first game state packet
+      net.onGameState = (state) => {
+        _hideGameLoadingOverlay();
+        net.onGameState = null; // one-shot
+      };
     };
 
     net.onOpenShop = ({ sharedPool }) => {
