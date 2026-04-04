@@ -439,6 +439,9 @@ function stopMultiplayer() {
   mpHud?.destroy();  mpHud  = null;
   mpMode = null;
   if (_mpFloor) { _mpFloor.geometry.dispose(); _mpFloor.material.dispose(); _mpFloor = null; }
+  _spectating = false;
+  camera.position.set(0, 26, 1);
+  camera.lookAt(0, 0, 0);
   document.getElementById('hud').style.display = 'none';
   if (scoreHudEl) scoreHudEl.style.display = '';
   if (roomNumEl)  roomNumEl.style.display  = '';
