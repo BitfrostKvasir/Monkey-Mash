@@ -33,9 +33,11 @@ export const DIFFICULTIES = [
 export const PATCHES = [
   {
     version: 'v1.2',
-    label:   'Boss Overhaul & Tutorial',
+    label:   'Boss Overhaul, Tutorial & Multiplayer',
     entries: [
-      { text: '👑 Banana King reworked',    tip: 'HP raised to 750. Faster, enrages at 60% HP, barrages fire 8–14 bananas, both shockwave hits always land, and a frenzy phase triggers at 25% HP spawning 4 minions.' },
+      { text: '🤝 Co-op multiplayer added',  tip: 'Play the full roguelike campaign with up to 4 players online. Shared banana economy, separate upgrades, teammate revive, and difficulty scaling tuned for groups.' },
+      { text: '⚔️ PvP mode added',           tip: 'Best-of-3 rounds on a stone battle arena. The round winner picks a free upgrade between rounds. First to 3 wins takes the match.' },
+      { text: '👑 Banana King reworked',     tip: 'HP raised to 750. Faster, enrages at 60% HP, barrages fire 8–14 bananas, both shockwave hits always land, and a frenzy phase triggers at 25% HP spawning 4 minions.' },
       { text: '🧪 Lab Ape reworked',         tip: 'HP raised to 950. Faster, overloads at 60% HP, laser lasts 2s at 28 DPS, grenades fire in triples on overload, slam leaves 2–4 spark hazards, sparks spawn every 1.2s.' },
       { text: '📖 Bestiary updated',         tip: 'Boss entries in the Bestiary now reflect the new HP, attack values, phase thresholds, and abilities introduced in this patch.' },
       { text: '🎓 Tutorial added',           tip: 'A guided 7-step tutorial taught by Old Wise Monkey. Covers movement, dashing, combat combos, class abilities, and upgrades. Accessible from the main menu.' },
