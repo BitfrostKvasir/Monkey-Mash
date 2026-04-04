@@ -707,6 +707,7 @@ export class Menu {
   }
 
   _showMultiplayer() {
+    if (!this._net) return;
     this._overlay.innerHTML = `
       <div class="menu-screen home-centre" style="gap:20px">
         <div class="menu-title" style="font-size:22px">MULTIPLAYER</div>
@@ -736,8 +737,8 @@ export class Menu {
 
     this._overlay.querySelector('#btn-quick-play').addEventListener('click', () => {
       this._net.quickPlay(playerData());
-      document.getElementById('mp-status').textContent = 'Searching for players...';
-      document.getElementById('mp-status').style.display = 'block';
+      this._overlay.querySelector('#mp-status').textContent = 'Searching for players...';
+      this._overlay.querySelector('#mp-status').style.display = 'block';
     });
 
     this._overlay.querySelector('#btn-create-room').addEventListener('click', () => {
@@ -745,8 +746,8 @@ export class Menu {
     });
 
     this._overlay.querySelector('#btn-join-room').addEventListener('click', () => {
-      const code = document.getElementById('mp-code-input').value.trim().toUpperCase();
-      if (code.length !== 5) { document.getElementById('mp-error').textContent = 'Enter a 5-letter code'; document.getElementById('mp-error').style.display = 'block'; return; }
+      const code = this._overlay.querySelector('#mp-code-input').value.trim().toUpperCase();
+      if (code.length !== 5) { this._overlay.querySelector('#mp-error').textContent = 'Enter a 5-letter code'; this._overlay.querySelector('#mp-error').style.display = 'block'; return; }
       this._net.joinRoom(code, playerData());
     });
 
@@ -797,9 +798,9 @@ export class Menu {
 
     // Render player rows
     const renderPlayers = (players) => {
-      document.getElementById('lobby-player-list').innerHTML = players.map(p => `
+      this._overlay.querySelector('#lobby-player-list').innerHTML = players.map(p => `
         <div class="lobby-row${p.socketId === this._net.mySocketId ? ' mine' : ''}"
-             data-sid="${p.socketId}"
+             data-sid="${escLobbyHtml(p.socketId)}"
              style="display:flex;align-items:center;gap:10px;background:rgba(0,0,0,0.6);
              border:1px solid ${p.socketId===this._net.mySocketId?'#44cc44':'#335522'};
              border-radius:8px;padding:8px 12px;cursor:${p.socketId===this._net.mySocketId?'pointer':'default'}">
@@ -809,7 +810,7 @@ export class Menu {
               ${escLobbyHtml(p.name || 'Player')}${p.isHost?' 👑':''}
             </div>
             <div style="font-family:'Press Start 2P',monospace;font-size:7px;color:#557744">
-              ${p.playerClass} · ${p.hat}
+              ${escLobbyHtml(p.playerClass)} · ${escLobbyHtml(p.hat)}
             </div>
           </div>
           <div style="font-family:'Press Start 2P',monospace;font-size:7px;color:${p.ready?'#44ff44':'#557744'}">
@@ -819,7 +820,7 @@ export class Menu {
       `).join('');
 
       // Click own row to open customiser
-      document.querySelectorAll('.lobby-row.mine').forEach(row => {
+      this._overlay.querySelectorAll('.lobby-row.mine').forEach(row => {
         row.addEventListener('click', () => this._toggleLobbyCustomiser());
       });
     };
@@ -828,16 +829,17 @@ export class Menu {
 
     // Host controls
     if (isHost) {
-      document.getElementById('lobby-mode')?.addEventListener('change', e => this._net.setMode(e.target.value));
-      document.getElementById('lobby-diff')?.addEventListener('change', e => this._net.setDifficulty(e.target.value));
-      document.getElementById('btn-lobby-start')?.addEventListener('click', () => this._net.startGame());
+      this._overlay.querySelector('#lobby-mode')?.addEventListener('change', e => this._net.setMode(e.target.value));
+      this._overlay.querySelector('#lobby-diff')?.addEventListener('change', e => this._net.setDifficulty(e.target.value));
+      this._overlay.querySelector('#btn-lobby-start')?.addEventListener('click', () => this._net.startGame());
     } else {
-      document.getElementById('btn-lobby-ready')?.addEventListener('click', () => {
+      this._overlay.querySelector('#btn-lobby-ready')?.addEventListener('click', () => {
         this._net.setReady(!me?.ready);
       });
     }
 
-    document.getElementById('btn-lobby-leave')?.addEventListener('click', () => {
+    this._overlay.querySelector('#btn-lobby-leave')?.addEventListener('click', () => {
+      this._net.onLobbyUpdate = null;
       this._net.destroy();
       this._net = null;
       this._showHome();
@@ -847,14 +849,14 @@ export class Menu {
     this._net.onLobbyUpdate = (data) => {
       renderPlayers(data.players);
       // Update start button
-      const canStart = data.players.length >= 2;
-      const startBtn = document.getElementById('btn-lobby-start');
+      const canStart = data.players.length >= 2 && data.players.every(p => p.ready || p.isHost);
+      const startBtn = this._overlay.querySelector('#btn-lobby-start');
       if (startBtn) startBtn.style.opacity = canStart ? '1' : '0.45';
     };
   }
 
   _toggleLobbyCustomiser() {
-    const el = document.getElementById('lobby-customiser');
+    const el = this._overlay.querySelector('#lobby-customiser');
     if (!el) return;
     if (el.style.display !== 'none') { el.style.display = 'none'; return; }
     el.style.display = 'block';
