@@ -51,6 +51,7 @@ export class ServerPlayer {
 
     this.reviveProgress = 0;
     this.reviverId      = null;
+    this._downTimer     = 0;
 
     this._pendingAttack  = false;
     this._pendingSpecial = false;
@@ -115,6 +116,11 @@ export class ServerPlayer {
       this.specialTimer -= dt;
       if (this.specialTimer <= 0) this.specialActive = false;
     }
+    // Down timer: fully die if not revived in time
+    if (this.isDown) {
+      this._downTimer -= dt;
+      if (this._downTimer <= 0) { this.isDown = false; this.isAlive = false; }
+    }
 
     if (this.dashTimer > 0) { this.vx *= Math.pow(0.3, dt); this.vz *= Math.pow(0.3, dt); }
 
@@ -131,7 +137,11 @@ export class ServerPlayer {
     const dmg = (this.playerClass === 'brawler' && this.specialActive) ? amount * 0.8 : amount;
     this.hp = Math.max(0, this.hp - dmg);
     this.iframes = IFRAMES;
-    if (this.hp <= 0) this.isAlive = false;
+    if (this.hp <= 0) {
+      this.hp = 0;
+      this.isDown   = true;   // enter downed state — can be revived
+      this._downTimer = 10.0; // 10 seconds to be rescued before fully dying
+    }
     return dmg;
   }
 
@@ -257,6 +267,7 @@ export class ServerPlayer {
       hp: this.hp, maxHp: this.maxHp + this.bonusMaxHp,
       isAlive:     this.isAlive,
       isDown:      this.isDown,
+      downTimer:   this.isDown ? this._downTimer : 0,
       dashing:     this.dashTimer > 0,
       specialCdRatio: cdRatio,
       specialActive:  this.specialActive,

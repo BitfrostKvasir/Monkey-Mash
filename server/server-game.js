@@ -150,6 +150,10 @@ export class ServerGame {
         }
         this.phase = 'shop';
         this._shopReadySet = new Set();
+        // Dead/downed players can't interact — auto-ready them so they don't block
+        for (const [sid, p] of Object.entries(this.players)) {
+          if (!p.isAlive) this._shopReadySet.add(sid);
+        }
         this.io.to(this.room.id).emit('open-shop', { sharedPool: this.sharedPool, roomNumber: this.roomNumber });
       }
     }
@@ -169,8 +173,10 @@ export class ServerGame {
   shopReady(socketId) {
     if (this.phase !== 'shop') return;
     this._shopReadySet.add(socketId);
-    const total = Object.keys(this.players).length;
-    const readyCount = this._shopReadySet.size;
+    // Only alive players need to explicitly ready — dead ones were auto-readied
+    const alivePlayers = Object.entries(this.players).filter(([, p]) => p.isAlive);
+    const total      = Math.max(1, alivePlayers.length);
+    const readyCount = alivePlayers.filter(([sid]) => this._shopReadySet.has(sid)).length;
     this.io.to(this.room.id).emit('shop-ready-update', {
       readyCount,
       total,
@@ -236,6 +242,19 @@ export class ServerGame {
     this.enemies    = spawnWave(this.roomNumber, Object.keys(this.players).length, this.room.difficulty);
     this.isBossRoom = (this.roomNumber === 8 || this.roomNumber === 16);
     this.bananas    = [];
+    // Revive any dead/downed players at the start of each new room
+    for (const p of Object.values(this.players)) {
+      if (!p.isAlive || p.isDown) {
+        p.isAlive = true;
+        p.isDown  = false;
+        p.hp      = Math.floor((p.maxHp + p.bonusMaxHp) * 0.5);
+        p.iframes = 1.5;
+        p._downTimer = 0;
+        p.reviveProgress = 0;
+        p.reviverId      = null;
+        this.io.to(this.room.id).emit('revive-complete', { socketId: p.socketId });
+      }
+    }
   }
 
   _broadcast() {
