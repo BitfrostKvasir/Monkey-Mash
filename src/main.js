@@ -871,6 +871,9 @@ function loop() {
     ['KeyW','KeyS','KeyA','KeyD'].forEach(k => { if (input.isDown(k)) keys.push(k); });
     // Calculate mouse angle relative to center of screen
     const mouseAngle = Math.atan2(mouseNDC.x, -mouseNDC.y);
+    // Update aim indicator every frame from local mouse (no server lag)
+    const meLocal = state ? mpRend.getMyState(state) : null;
+    if (meLocal?.isAlive && !meLocal.isDown) mpRend.updateLocalAim(meLocal.x, meLocal.z, mouseAngle);
     net.sendInput({
       keys,
       mouseAngle,
