@@ -466,6 +466,7 @@ function stopMultiplayer() {
   document.getElementById('mp-pause-overlay')?.remove();
   document.getElementById('coop-shop-overlay')?.remove();
   if (net) { net.onPoolUpdate = null; net.onShopReadyUpdate = null; }
+  if (bossHud) bossHud.style.display = 'none';
   _spectating = false;
   camera.position.set(0, 26, 1);
   camera.lookAt(0, 0, 0);
@@ -841,6 +842,16 @@ function loop() {
 
       // Room number
       if (roomNumEl && state.roomNumber) roomNumEl.textContent = 'Room ' + state.roomNumber;
+
+      // Boss HUD
+      if (state.isBossRoom && state.enemies?.length > 0) {
+        const boss = state.enemies[0];
+        if (bossHud) bossHud.style.display = 'block';
+        if (bossNameEl) bossNameEl.textContent = boss.type === 'bananaKing' ? '👑 Banana King' : '🧪 Lab Ape';
+        if (bossHpFill) bossHpFill.style.width = ((boss.hp / (boss.maxHp || 1)) * 100).toFixed(1) + '%';
+      } else if (bossHud && state.phase !== 'fight') {
+        bossHud.style.display = 'none';
+      }
 
       // Room clear flash when fight phase ends
       if (state.phase !== _mpLastPhase) {

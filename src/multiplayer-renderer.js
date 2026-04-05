@@ -43,13 +43,54 @@ function _buildEnemyMesh(type) {
       add(g, new THREE.SphereGeometry(0.08, 5, 3), 0xff2222,  0.12, 1.18, 0.32);
       break;
     }
-    case 'boss': {
-      // Large golden king
-      add(g, new THREE.SphereGeometry(0.55, 10, 8), 0xd4a017, 0, 0.6, 0);
-      add(g, new THREE.SphereGeometry(0.52, 10, 8), 0xd4a017, 0, 1.5, 0);
-      add(g, new THREE.CylinderGeometry(0.18, 0.52, 0.35, 8), 0xffcc00, 0, 2.05, 0);
-      add(g, new THREE.SphereGeometry(0.1, 5, 3), 0xff2222, -0.18, 1.55, 0.44);
-      add(g, new THREE.SphereGeometry(0.1, 5, 3), 0xff2222,  0.18, 1.55, 0.44);
+    case 'strangler': {
+      // Green vine-wrapped figure with long arms
+      add(g, new THREE.SphereGeometry(0.30, 8, 6), 0x2d5a0e, 0, 0.44, 0);
+      add(g, new THREE.SphereGeometry(0.34, 8, 6), 0x2d5a0e, 0, 1.10, 0);
+      add(g, new THREE.CylinderGeometry(0.05, 0.04, 0.7, 5), 0x1a3a0a, -0.5, 0.88, 0); // left arm
+      add(g, new THREE.CylinderGeometry(0.05, 0.04, 0.7, 5), 0x1a3a0a,  0.5, 0.88, 0); // right arm
+      add(g, new THREE.SphereGeometry(0.08, 5, 3), 0xaaff22, -0.11, 1.15, 0.28);
+      add(g, new THREE.SphereGeometry(0.08, 5, 3), 0xaaff22,  0.11, 1.15, 0.28);
+      break;
+    }
+    case 'thunder': {
+      // Pale blue electric monkey with lightning accents
+      add(g, new THREE.SphereGeometry(0.29, 8, 6), 0x3355aa, 0, 0.44, 0);
+      add(g, new THREE.SphereGeometry(0.33, 8, 6), 0x3355aa, 0, 1.08, 0);
+      add(g, new THREE.ConeGeometry(0.12, 0.35, 4), 0x88ccff, 0, 1.52, 0); // lightning bolt on head
+      add(g, new THREE.SphereGeometry(0.08, 5, 3), 0xffff44, -0.11, 1.13, 0.28);
+      add(g, new THREE.SphereGeometry(0.08, 5, 3), 0xffff44,  0.11, 1.13, 0.28);
+      break;
+    }
+    case 'bananaKing': {
+      // Large golden crowned king — boss
+      add(g, new THREE.SphereGeometry(0.55, 10, 8), 0xd4a017, 0, 0.65, 0);  // body
+      add(g, new THREE.SphereGeometry(0.52, 10, 8), 0xd4a017, 0, 1.60, 0);  // head
+      // Crown
+      add(g, new THREE.CylinderGeometry(0.34, 0.52, 0.28, 8), 0xffcc00, 0, 2.12, 0);
+      for (let i = 0; i < 5; i++) {
+        const a = (i / 5) * Math.PI * 2;
+        add(g, new THREE.ConeGeometry(0.07, 0.22, 4), 0xffdd00, Math.cos(a)*0.3, 2.36, Math.sin(a)*0.3);
+      }
+      add(g, new THREE.SphereGeometry(0.12, 5, 3), 0xff2222, -0.20, 1.65, 0.44);
+      add(g, new THREE.SphereGeometry(0.12, 5, 3), 0xff2222,  0.20, 1.65, 0.44);
+      // Wide arms
+      add(g, new THREE.CylinderGeometry(0.10, 0.08, 0.8, 6), 0xc49015, -0.7, 1.1, 0);
+      add(g, new THREE.CylinderGeometry(0.10, 0.08, 0.8, 6), 0xc49015,  0.7, 1.1, 0);
+      break;
+    }
+    case 'labApe': {
+      // Hulking grey lab experiment — boss
+      add(g, new THREE.SphereGeometry(0.58, 10, 8), 0x556677, 0, 0.68, 0);
+      add(g, new THREE.SphereGeometry(0.54, 10, 8), 0x556677, 0, 1.65, 0);
+      // Lab helmet/visor
+      add(g, new THREE.SphereGeometry(0.50, 10, 8), 0x223344, 0, 1.65, 0.05);
+      add(g, new THREE.BoxGeometry(0.65, 0.18, 0.12), 0x44aaff, 0, 1.68, 0.51); // visor
+      add(g, new THREE.SphereGeometry(0.10, 5, 3), 0x44ffff, -0.22, 1.70, 0.46);
+      add(g, new THREE.SphereGeometry(0.10, 5, 3), 0x44ffff,  0.22, 1.70, 0.46);
+      // Thick arms
+      add(g, new THREE.CylinderGeometry(0.13, 0.10, 0.9, 6), 0x445566, -0.78, 1.1, 0);
+      add(g, new THREE.CylinderGeometry(0.13, 0.10, 0.9, 6), 0x445566,  0.78, 1.1, 0);
       break;
     }
     default: { // grunt
@@ -74,9 +115,10 @@ export class MultiplayerRenderer {
   constructor(scene, mySocketId) {
     this.scene      = scene;
     this.mySocketId = mySocketId;
-    this._players   = {}; // socketId -> { mesh, ring, baseColors, aimArc? }
-    this._enemies   = {}; // id -> { mesh, hpBg, hpFg }
-    this._bananas   = {}; // id -> mesh
+    this._players    = {}; // socketId -> { mesh, ring, baseColors, aimArc? }
+    this._enemies    = {}; // id -> { mesh, hpBg, hpFg }
+    this._bananas    = {}; // id -> mesh
+    this._projectiles = []; // THREE.Mesh[]
   }
 
   applyState(state) {
@@ -84,6 +126,7 @@ export class MultiplayerRenderer {
     this._syncPlayers(state.players || []);
     this._syncEnemies(state.enemies || []);
     this._syncBananas(state.bananas || []);
+    this._syncProjectiles(state.projectiles || []);
   }
 
   getMyState(state) {
@@ -167,8 +210,9 @@ export class MultiplayerRenderer {
       if (!this._enemies[e.id]) {
         const mesh = _buildEnemyMesh(e.type);
 
+        const isBoss = e.type === 'bananaKing' || e.type === 'labApe';
         // HP bar — background track + foreground fill as child meshes
-        const barW = 0.7, barH = 0.08;
+        const barW = isBoss ? 2.2 : 0.7, barH = isBoss ? 0.14 : 0.08;
         const hpBg = new THREE.Mesh(
           new THREE.PlaneGeometry(barW, barH),
           new THREE.MeshBasicMaterial({ color: 0x333333, side: THREE.DoubleSide, depthWrite: false })
@@ -186,7 +230,7 @@ export class MultiplayerRenderer {
         mesh.add(hpFg);
 
         this.scene.add(mesh);
-        this._enemies[e.id] = { mesh, hpBg, hpFg };
+        this._enemies[e.id] = { mesh, hpBg, hpFg, barW };
       }
       const entry = this._enemies[e.id];
       entry.mesh.position.set(e.x, 0, e.z);
@@ -194,7 +238,7 @@ export class MultiplayerRenderer {
       // Update HP bar fill
       const pct = Math.max(0, e.hp / (e.maxHp || 1));
       entry.hpFg.scale.x = pct;
-      entry.hpFg.position.x = -(1 - pct) * 0.35; // slide left as HP drops
+      entry.hpFg.position.x = -(1 - pct) * (entry.barW / 2); // slide left as HP drops
       entry.hpFg.material.color.setHex(pct > 0.5 ? 0x44cc44 : pct > 0.25 ? 0xffcc00 : 0xff4444);
     }
     for (const id of Object.keys(this._enemies)) {
@@ -204,6 +248,22 @@ export class MultiplayerRenderer {
         entry.mesh.traverse(c => { if (c.isMesh) disposeMesh(c); });
         delete this._enemies[id];
       }
+    }
+  }
+
+  _syncProjectiles(projectiles) {
+    // Remove old projectile meshes
+    for (const m of this._projectiles) { this.scene.remove(m); disposeMesh(m); }
+    this._projectiles = [];
+    // Recreate from current state
+    for (const proj of projectiles) {
+      const geo  = new THREE.SphereGeometry(0.18, 6, 4);
+      const mat  = new THREE.MeshLambertMaterial({ color: 0xffee00 });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(proj.x, 0.55, proj.z);
+      mesh.castShadow = false;
+      this.scene.add(mesh);
+      this._projectiles.push(mesh);
     }
   }
 
@@ -236,6 +296,7 @@ export class MultiplayerRenderer {
       entry.mesh.traverse(c => { if (c.isMesh) disposeMesh(c); });
     }
     for (const mesh of Object.values(this._bananas))  { this.scene.remove(mesh); disposeMesh(mesh); }
-    this._players = {}; this._enemies = {}; this._bananas = {};
+    for (const mesh of this._projectiles) { this.scene.remove(mesh); disposeMesh(mesh); }
+    this._players = {}; this._enemies = {}; this._bananas = {}; this._projectiles = [];
   }
 }

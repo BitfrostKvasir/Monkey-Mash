@@ -97,10 +97,21 @@ export class ServerGame {
         player.update(dt);
 
         if (player._pendingAttack) {
-          const atk = player.fireComboAttack();
+          const atk = player.fireAttack();
           if (atk) this._resolveAttack(player, atk);
         }
         if (player._pendingSpecial) player.useSpecial();
+
+        // Tick slinger projectiles
+        if (player.playerClass === 'slinger') {
+          const hits = player.updateProjectiles(dt, this.enemies);
+          for (const { enemy, dmg } of hits) {
+            if (!enemy.isDead) {
+              enemy.takeDamage(dmg);
+              this.io.to(this.room.id).emit('enemy-hit', { id: enemy.id, dmg: Math.round(dmg) });
+            }
+          }
+        }
       }
 
       this._tickRevive(dt);
@@ -222,17 +233,31 @@ export class ServerGame {
   }
 
   _spawnWave() {
-    this.enemies = spawnWave(this.roomNumber, Object.keys(this.players).length, this.room.difficulty);
-    this.bananas = [];
+    this.enemies    = spawnWave(this.roomNumber, Object.keys(this.players).length, this.room.difficulty);
+    this.isBossRoom = (this.roomNumber === 8 || this.roomNumber === 16);
+    this.bananas    = [];
   }
 
   _broadcast() {
+    // Collect active slinger projectiles for client rendering
+    const projectiles = [];
+    for (const p of Object.values(this.players)) {
+      if (p.playerClass === 'slinger') {
+        for (const proj of p._projectiles) {
+          if (!proj.done) projectiles.push({ x: proj.x, z: proj.z, ownerId: p.socketId });
+        }
+      }
+    }
+
     this.io.to(this.room.id).emit('game-state', {
       players:    Object.values(this.players).map(p => p.toState()),
       enemies:    this.enemies.map(e => e.toState()),
       bananas:    this.bananas,
       sharedPool: this.sharedPool,
       phase:      this.phase,
+      roomNumber: this.roomNumber,
+      isBossRoom: this.isBossRoom ?? false,
+      projectiles,
     });
   }
 
