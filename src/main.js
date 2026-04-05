@@ -65,6 +65,11 @@ window.addEventListener('mousemove', e => {
   mouseNDC.y = -(e.clientY / window.innerHeight) * 2 + 1;
 });
 
+// Raycaster for accurate world-space mouse aim (shared between solo and multiplayer)
+const _raycaster   = new THREE.Raycaster();
+const _groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+const _aimWorld    = new THREE.Vector3();
+
 // Prevent right-click context menu so right-click can be used as a game input
 window.addEventListener('contextmenu', e => e.preventDefault());
 
@@ -869,10 +874,14 @@ function loop() {
     // Send inputs every frame
     const keys = [];
     ['KeyW','KeyS','KeyA','KeyD'].forEach(k => { if (input.isDown(k)) keys.push(k); });
-    // Calculate mouse angle relative to center of screen
-    const mouseAngle = Math.atan2(mouseNDC.x, -mouseNDC.y);
-    // Update aim indicator every frame from local mouse (no server lag)
+    // Raycast mouse to ground plane — same method as solo, accurate world-space angle
+    _raycaster.setFromCamera(mouseNDC, camera);
+    _raycaster.ray.intersectPlane(_groundPlane, _aimWorld);
     const meLocal = state ? mpRend.getMyState(state) : null;
+    const mouseAngle = meLocal
+      ? Math.atan2(_aimWorld.x - meLocal.x, _aimWorld.z - meLocal.z)
+      : Math.atan2(mouseNDC.x, -mouseNDC.y); // fallback before first state
+    // Update aim indicator every frame from local mouse (no server lag)
     if (meLocal?.isAlive && !meLocal.isDown) mpRend.updateLocalAim(meLocal.x, meLocal.z, mouseAngle);
     net.sendInput({
       keys,
